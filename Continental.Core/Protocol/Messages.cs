@@ -17,6 +17,7 @@ public static class MessageType
     public const string ClaimSteal = "steal";
     public const string LayDown = "laydown";
     public const string Extend = "extend";
+    public const string SwapJoker = "swapjoker";
     public const string Discard = "discard";
     public const string NextRound = "nextround";
     public const string PlayAgain = "playagain";
@@ -45,6 +46,10 @@ public sealed class ClientMessage
     public int? CardId { get; set; }
 
     public int? Source { get; set; }
+
+    public int? Position { get; set; }
+
+    public string? TargetMeldId { get; set; }
 
     public int? BotLevel { get; set; }
 

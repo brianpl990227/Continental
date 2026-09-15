@@ -153,9 +153,14 @@ public static class MeldValidator
     public static (Meld? Meld, string? Error) Build(string id, string ownerId, MeldKind kind,
                                                     IReadOnlyList<Card> cards, GameOptions options)
     {
-        var result = kind == MeldKind.Trio
-            ? TryTrio(cards, options)
-            : TryEscalera(cards, options);
+        // Si la escalera ya viene colocada y vale tal cual, se respeta. Reordenarla
+        // siempre convertía 4-5-6-J en 3-4-5-6 aunque el jugador quisiera el 7.
+        var result = kind switch
+        {
+            MeldKind.Trio => TryTrio(cards, options),
+            _ when IsRunInOrder(cards, options) => MeldResult.Success([.. cards]),
+            _ => TryEscalera(cards, options)
+        };
 
         if (!result.Ok || result.Arranged is null)
             return (null, result.Error);
@@ -188,41 +193,181 @@ public static class MeldValidator
         return (meld, null);
     }
 
-    public static bool CanExtend(Meld meld, Card card, GameOptions options, out int position)
+    // La carta natural que un comodín está tapando en una escalera ya bajada.
+    // Es lo que hay que entregar para canjearlo.
+    public static Card? JokerStandsFor(Meld meld, int index, GameOptions options)
     {
-        position = -1;
+        if (meld.Kind != MeldKind.Escalera || index < 0 || index >= meld.Size)
+            return null;
 
-        if (meld.Kind == MeldKind.Trio)
+        if (!meld.Cards[index].IsJoker)
+            return null;
+
+        var anchor = -1;
+
+        for (var i = 0; i < meld.Size; i++)
         {
-            if (!card.IsJoker && meld.TrioRank is { } rank && card.Rank != rank)
-                return false;
-
-            if (options.TrioRequiresDistinctSuits && !card.IsJoker)
+            if (!meld.Cards[i].IsJoker)
             {
-                if (meld.Cards.Any(c => !c.IsJoker && c.Suit == card.Suit))
-                    return false;
+                anchor = i;
+                break;
+            }
+        }
 
-                if (meld.Size >= 4)
+        if (anchor < 0)
+            return null;
+
+        var suit = meld.Cards[anchor].Suit;
+        var value = SlotValue(meld.Cards[anchor], options) + (index - anchor);
+
+        Rank rank;
+
+        if (options.AceHighAndLow)
+        {
+            rank = (Rank)(((value - 1) % 13 + 13) % 13 + 1);
+        }
+        else
+        {
+            if (value < 2 || value > 14)
+                return null;
+
+            rank = value == 14 ? Rank.Ace : (Rank)value;
+        }
+
+        return new Card(-1, suit, rank);
+    }
+
+    // Comprueba la secuencia TAL CUAL viene, sin reordenarla. TryEscalera devuelve la
+    // primera colocación que le cuadra, que para [4 5 6 J] es [J 4 5 6]; preguntarle si
+    // una secuencia concreta vale daba siempre que no en cuanto el comodín iba al final.
+    public static bool IsRunInOrder(IReadOnlyList<Card> cards, GameOptions options)
+    {
+        if (cards.Count < options.MinEscaleraSize)
+            return false;
+
+        var naturals = cards.Where(c => !c.IsJoker).ToList();
+
+        if (naturals.Count == 0)
+            return false;
+
+        var suit = naturals[0].Suit;
+
+        if (naturals.Any(c => c.Suit != suit))
+            return false;
+
+        if (options.NoTwoAdjacentJokersInEscalera)
+        {
+            for (var i = 1; i < cards.Count; i++)
+            {
+                if (cards[i].IsJoker && cards[i - 1].IsJoker)
                     return false;
             }
-
-            position = meld.Size;
-            return true;
         }
+
+        var anchor = 0;
+
+        while (cards[anchor].IsJoker)
+            anchor++;
+
+        var baseValue = SlotValue(cards[anchor], options) - anchor;
+
+        if (options.AceHighAndLow)
+        {
+            if (cards.Count > 13)
+                return false;
+        }
+        else if (baseValue < 2 || baseValue + cards.Count - 1 > 14)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < cards.Count; i++)
+        {
+            if (cards[i].IsJoker)
+                continue;
+
+            var expected = baseValue + i;
+
+            if (options.AceHighAndLow)
+                expected = ((expected - 1) % 13 + 13) % 13 + 1;
+
+            if (SlotValue(cards[i], options) != expected)
+                return false;
+        }
+
+        return true;
+    }
+
+    // Cuando los naturales ya van seguidos y hay un solo comodín, este únicamente
+    // puede ir a un extremo, y los dos valen. Quién sea la decide el jugador.
+    public static (List<Card> Low, List<Card> High)? EndChoiceFor(IReadOnlyList<Card> cards, GameOptions options)
+    {
+        if (cards.Count(c => c.IsJoker) != 1)
+            return null;
+
+        var joker = cards.First(c => c.IsJoker);
+        var naturals = cards.Where(c => !c.IsJoker).OrderBy(c => SlotValue(c, options)).ToList();
+
+        if (naturals.Count == 0)
+            return null;
+
+        var low = new List<Card>(naturals);
+        low.Insert(0, joker);
+
+        var high = new List<Card>(naturals) { joker };
+
+        return IsRunInOrder(low, options) && IsRunInOrder(high, options)
+            ? (low, high)
+            : null;
+    }
+
+    // Un comodín suele encajar por los dos extremos de una escalera. Quien quiera dar
+    // a elegir necesita saber cuáles de los dos valen, no solo el primero.
+    public static IReadOnlyList<int> ExtendPositions(Meld meld, Card card, GameOptions options)
+    {
+        if (meld.Kind == MeldKind.Trio)
+            return TrioExtendPosition(meld, card, options) is { } only ? [only] : [];
+
+        var fits = new List<int>();
 
         foreach (var candidate in new[] { 0, meld.Size })
         {
             var trial = new List<Card>(meld.Cards);
             trial.Insert(candidate, card);
 
-            if (TryEscalera(trial, options) is { Ok: true, Arranged: not null } fit
-                && fit.Arranged.SequenceEqual(trial))
-            {
-                position = candidate;
-                return true;
-            }
+            if (IsRunInOrder(trial, options))
+                fits.Add(candidate);
         }
 
-        return false;
+        return fits;
+    }
+
+    public static bool CanExtendAt(Meld meld, Card card, GameOptions options, int position)
+        => ExtendPositions(meld, card, options).Contains(position);
+
+    public static bool CanExtend(Meld meld, Card card, GameOptions options, out int position)
+    {
+        var fits = ExtendPositions(meld, card, options);
+
+        position = fits.Count > 0 ? fits[0] : -1;
+
+        return fits.Count > 0;
+    }
+
+    private static int? TrioExtendPosition(Meld meld, Card card, GameOptions options)
+    {
+        if (!card.IsJoker && meld.TrioRank is { } rank && card.Rank != rank)
+            return null;
+
+        if (options.TrioRequiresDistinctSuits && !card.IsJoker)
+        {
+            if (meld.Cards.Any(c => !c.IsJoker && c.Suit == card.Suit))
+                return null;
+
+            if (meld.Size >= 4)
+                return null;
+        }
+
+        return meld.Size;
     }
 }

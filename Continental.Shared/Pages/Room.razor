@@ -295,6 +295,21 @@ else
             </div>
         }
 
+        @if (Choosing is { } pending)
+        {
+            <div class="chooser" role="dialog" aria-label="@pending.Title">
+                <div class="chooser__title">@pending.Title</div>
+                <div class="chooser__actions">
+                    @foreach (var choice in pending.Choices)
+                    {
+                        <button class="btn btn--grow @(choice.Highlight ? "btn--primary" : "")"
+                                @onclick="@(() => Resolve(choice))">@choice.Label</button>
+                    }
+                </div>
+                <button class="btn btn--ghost" @onclick="@(() => Choosing = null)">Cancelar</button>
+            </div>
+        }
+
         @if (Link == ConnectionState.Reconnecting)
         {
             <div class="relink" role="status">
@@ -666,7 +681,7 @@ else
 
         if (chosen is not null)
         {
-            await SendLayDown(chosen);
+            await AskJokerPlacement(chosen, 0);
             return;
         }
 
@@ -717,6 +732,47 @@ else
             picked, RoundContract.Standard[view.RoundIndex], view.Options) is not null;
     }
 
+    // Antes de bajarse: si en alguna escalera el comodín puede ir a los dos extremos,
+    // el jugador elige qué carta hace. Se recorren una a una.
+    private async Task AskJokerPlacement(List<MeldSpec> specs, int from)
+    {
+        if (View is not { } view)
+            return;
+
+        for (var i = from; i < specs.Count; i++)
+        {
+            if (specs[i].Kind != MeldKind.Escalera)
+                continue;
+
+            var cards = specs[i].CardIds.Select(id => view.Hand.First(c => c.Id == id)).ToList();
+
+            if (MeldValidator.EndChoiceFor(cards, view.Options) is not { } choice)
+                continue;
+
+            var (low, high) = choice;
+            var index = i;
+
+            Choosing = new PendingChoice("¿Qué hace el comodín?",
+            [
+                new Choice($"Hace de {JokerName(low, 0, view.Options)}", false,
+                           () => PlaceJoker(specs, index, low)),
+                new Choice($"Hace de {JokerName(high, high.Count - 1, view.Options)}", false,
+                           () => PlaceJoker(specs, index, high))
+            ]);
+
+            return;
+        }
+
+        await SendLayDown(specs);
+    }
+
+    private Task PlaceJoker(List<MeldSpec> specs, int index, List<Card> order)
+    {
+        specs[index] = specs[index] with { CardIds = order.Select(c => c.Id).ToList() };
+
+        return AskJokerPlacement(specs, index + 1);
+    }
+
     private async Task SendLayDown(List<MeldSpec> specs)
     {
         await Send(new ClientMessage
@@ -754,13 +810,130 @@ else
         return $"Con esas cartas no se forma {contract.Describe()}.";
     }
 
+    private sealed record Choice(string Label, bool Highlight, Func<Task> Run);
+
+    private sealed record PendingChoice(string Title, List<Choice> Choices);
+
+    private PendingChoice? Choosing;
+
+    private static Meld ToMeld(MeldView view) => new()
+    {
+        Id = view.Id,
+        OwnerId = view.OwnerId,
+        Kind = view.Kind,
+        Cards = [.. view.Cards]
+    };
+
+    private static string JokerName(IReadOnlyList<Card> cards, int index, GameOptions options)
+    {
+        var meld = new Meld { Id = "tmp", OwnerId = "tmp", Kind = MeldKind.Escalera, Cards = [.. cards] };
+
+        return MeldValidator.JokerStandsFor(meld, index, options)?.Label ?? "comodín";
+    }
+
+    private async Task Resolve(Choice choice)
+    {
+        Choosing = null;
+        await choice.Run();
+    }
+
     private async Task Extend(string meldId)
     {
-        if (!CanExtend)
+        if (!CanExtend || View is null)
             return;
 
         var cardId = Selected.First();
-        await Send(new ClientMessage { Type = MessageType.Extend, MeldId = meldId, CardId = cardId });
+        var card = View.Hand.FirstOrDefault(c => c.Id == cardId);
+        var view = View.Table.FirstOrDefault(m => m.Id == meldId);
+
+        if (view is null || card.Id != cardId)
+            return;
+
+        var meld = ToMeld(view);
+        var options = View.Options;
+        var choices = new List<Choice>();
+
+        var ends = MeldValidator.ExtendPositions(meld, card, options);
+
+        if (ends.Count > 1)
+        {
+            foreach (var (slot, side) in new[] { (ends[0], "izquierda"), (ends[^1], "derecha") })
+            {
+                var trial = new List<Card>(meld.Cards);
+                trial.Insert(slot, card);
+
+                var label = card.IsJoker
+                    ? $"A la {side}, haciendo de {JokerName(trial, slot, options)}"
+                    : $"Poner {card.Label} a la {side}";
+
+                choices.Add(new Choice(label, false, () => SendExtend(meldId, cardId, slot)));
+            }
+        }
+        else if (ends.Count == 1)
+        {
+            var slot = ends[0];
+            choices.Add(new Choice($"Poner {card.Label}", false, () => SendExtend(meldId, cardId, slot)));
+        }
+
+        if (CanSwapHere(meld, card, options))
+            choices.Add(new Choice($"Canjear el comodín por {card.Label}", true, () => SendSwap(meldId, cardId)));
+
+        switch (choices.Count)
+        {
+            case 0:
+                return;
+
+            case 1:
+                await Resolve(choices[0]);
+                return;
+
+            default:
+                Choosing = new PendingChoice("¿Qué hago?", choices);
+                return;
+        }
+    }
+
+    private bool CanSwapHere(Meld meld, Card card, GameOptions options)
+    {
+        if (options.JokerSwapMode == JokerSwap.Off || meld.Kind != MeldKind.Escalera || card.IsJoker)
+            return false;
+
+        if (options.JokerSwapMode == JokerSwap.OwnerOnly && meld.OwnerId != View?.YouId)
+            return false;
+
+        for (var i = 0; i < meld.Size; i++)
+        {
+            if (MeldValidator.JokerStandsFor(meld, i, options) is { } stands
+                && stands.Rank == card.Rank && stands.Suit == card.Suit)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task SendExtend(string meldId, int cardId, int position)
+    {
+        await Send(new ClientMessage
+        {
+            Type = MessageType.Extend,
+            MeldId = meldId,
+            CardId = cardId,
+            Position = position
+        });
+
+        Selected.Clear();
+    }
+
+    private async Task SendSwap(string meldId, int cardId)
+    {
+        await Send(new ClientMessage
+        {
+            Type = MessageType.SwapJoker,
+            MeldId = meldId,
+            CardId = cardId
+        });
 
         Selected.Clear();
     }

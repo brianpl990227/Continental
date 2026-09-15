@@ -225,6 +225,157 @@ public class GameEngineTests
     }
 }
 
+public class JokerSwapTests
+{
+    private static int _id = 1;
+
+    private static Card C(Suit suit, Rank rank) => new(_id++, suit, rank);
+
+    private static Card J() => Card.Joker(_id++);
+
+    // Mesa montada a mano: Ana bajó 4H-5H-6H-7H con el 5H tapado por un comodín,
+    // y es el turno de Beto, que también está bajado.
+    private static GameEngine Table(out GameState state, JokerSwap mode, string mover = "p2")
+    {
+        var options = GameOptions.ForPreset(RulePreset.LatinAmerica) with { JokerSwapMode = mode };
+
+        state = new GameState { RoomId = "t", RoomName = "Test", Options = options };
+
+        var engine = new GameEngine(state, new Random(7));
+        engine.AddPlayer("p1", "Ana", false, isHost: true);
+        engine.AddPlayer("p2", "Beto", false);
+
+        foreach (var p in state.Players)
+            p.HasLaidDown = true;
+
+        state.Phase = GamePhase.Action;
+        state.CurrentPlayerIndex = state.Players.FindIndex(p => p.Id == mover);
+
+        state.Table.Add(new Meld
+        {
+            Id = "m1",
+            OwnerId = "p1",
+            Kind = MeldKind.Escalera,
+            EscaleraSuit = Suit.Hearts,
+            Cards = [C(Suit.Hearts, Rank.Four), J(), C(Suit.Hearts, Rank.Six), C(Suit.Hearts, Rank.Seven)]
+        });
+
+        return engine;
+    }
+
+    [Fact]
+    public void Anyone_laid_down_can_swap_in_the_latin_variant()
+    {
+        var engine = Table(out var state, JokerSwap.AnyLaidDownPlayer);
+
+        var beto = state.Players.First(p => p.Id == "p2");
+        var five = C(Suit.Hearts, Rank.Five);
+        beto.Hand.Add(five);
+
+        var result = engine.SwapJoker("p2", "m1", five.Id, null, null);
+
+        Assert.True(result.Ok, result.Error);
+
+        var meld = state.Table[0];
+
+        // El 5H entra en el hueco y el comodín liberado se recoloca en un extremo,
+        // asi que la escalera pasa de cuatro a cinco cartas.
+        Assert.Contains(meld.Cards, c => c.Id == five.Id);
+        Assert.Single(meld.Cards, c => c.IsJoker);
+        Assert.Equal(5, meld.Size);
+        Assert.True(MeldValidator.IsRunInOrder(meld.Cards, state.Options));
+        Assert.DoesNotContain(beto.Hand, c => c.Id == five.Id);
+    }
+
+    [Fact]
+    public void Only_the_owner_can_swap_in_the_spanish_variant()
+    {
+        var engine = Table(out var state, JokerSwap.OwnerOnly);
+
+        var beto = state.Players.First(p => p.Id == "p2");
+        var five = C(Suit.Hearts, Rank.Five);
+        beto.Hand.Add(five);
+
+        var result = engine.SwapJoker("p2", "m1", five.Id, null, null);
+
+        Assert.False(result.Ok);
+        Assert.Contains("dueño", result.Error);
+        Assert.True(state.Table[0].Cards[1].IsJoker);
+    }
+
+    [Fact]
+    public void The_owner_can_always_swap_in_the_spanish_variant()
+    {
+        var engine = Table(out var state, JokerSwap.OwnerOnly, mover: "p1");
+
+        var ana = state.Players.First(p => p.Id == "p1");
+        var five = C(Suit.Hearts, Rank.Five);
+        ana.Hand.Add(five);
+
+        Assert.True(engine.SwapJoker("p1", "m1", five.Id, null, null).Ok);
+        Assert.Contains(state.Table[0].Cards, c => c.Id == five.Id);
+        Assert.True(MeldValidator.IsRunInOrder(state.Table[0].Cards, state.Options));
+    }
+
+    [Fact]
+    public void Swapping_is_off_when_the_variant_says_so()
+    {
+        var engine = Table(out var state, JokerSwap.Off, mover: "p1");
+
+        var ana = state.Players.First(p => p.Id == "p1");
+        var five = C(Suit.Hearts, Rank.Five);
+        ana.Hand.Add(five);
+
+        Assert.False(engine.SwapJoker("p1", "m1", five.Id, null, null).Ok);
+    }
+
+    [Fact]
+    public void You_must_hand_over_the_exact_card_the_joker_covers()
+    {
+        var engine = Table(out var state, JokerSwap.AnyLaidDownPlayer);
+
+        var beto = state.Players.First(p => p.Id == "p2");
+        var nine = C(Suit.Hearts, Rank.Nine);
+        beto.Hand.Add(nine);
+
+        var result = engine.SwapJoker("p2", "m1", nine.Id, null, null);
+
+        Assert.False(result.Ok);
+        Assert.Contains("Ningún comodín", result.Error);
+    }
+
+    [Fact]
+    public void The_freed_joker_can_be_placed_on_either_end()
+    {
+        foreach (var (slot, expected) in new[] { (0, 0), (4, 4) })
+        {
+            var engine = Table(out var state, JokerSwap.AnyLaidDownPlayer);
+
+            var beto = state.Players.First(p => p.Id == "p2");
+            var five = C(Suit.Hearts, Rank.Five);
+            beto.Hand.Add(five);
+
+            Assert.True(engine.SwapJoker("p2", "m1", five.Id, null, slot).Ok);
+            Assert.True(state.Table[0].Cards[expected].IsJoker);
+        }
+    }
+
+    [Fact]
+    public void A_joker_cannot_land_next_to_another_joker()
+    {
+        var engine = Table(out var state, JokerSwap.AnyLaidDownPlayer);
+
+        // Un segundo comodín ocupando el extremo izquierdo.
+        state.Table[0].Cards.Insert(0, J());
+
+        var beto = state.Players.First(p => p.Id == "p2");
+        var five = C(Suit.Hearts, Rank.Five);
+        beto.Hand.Add(five);
+
+        Assert.False(engine.SwapJoker("p2", "m1", five.Id, null, 0).Ok);
+    }
+}
+
 public class BotTests
 {
 

@@ -161,6 +161,114 @@ public class MeldValidatorTests
     }
 
     [Fact]
+    public void A_joker_on_an_open_end_fits_both_sides()
+    {
+        var (meld, _) = MeldValidator.Build("m1", "p1", MeldKind.Escalera,
+            [C(Suit.Hearts, Rank.Four), C(Suit.Hearts, Rank.Five), C(Suit.Hearts, Rank.Six), C(Suit.Hearts, Rank.Seven)], LatAm);
+
+        var ends = MeldValidator.ExtendPositions(meld!, J(), LatAm);
+
+        Assert.Equal(2, ends.Count);
+        Assert.Contains(0, ends);
+        Assert.Contains(meld!.Size, ends);
+    }
+
+    [Fact]
+    public void A_natural_card_fits_only_its_own_end()
+    {
+        var (meld, _) = MeldValidator.Build("m1", "p1", MeldKind.Escalera,
+            [C(Suit.Hearts, Rank.Four), C(Suit.Hearts, Rank.Five), C(Suit.Hearts, Rank.Six), C(Suit.Hearts, Rank.Seven)], LatAm);
+
+        Assert.Equal([meld!.Size], MeldValidator.ExtendPositions(meld, C(Suit.Hearts, Rank.Eight), LatAm));
+        Assert.Equal([0], MeldValidator.ExtendPositions(meld, C(Suit.Hearts, Rank.Three), LatAm));
+    }
+
+    [Fact]
+    public void A_joker_in_the_middle_reports_the_card_it_covers()
+    {
+        var (meld, _) = MeldValidator.Build("m1", "p1", MeldKind.Escalera,
+            [C(Suit.Hearts, Rank.Four), J(), C(Suit.Hearts, Rank.Six), C(Suit.Hearts, Rank.Seven)], LatAm);
+
+        var stands = MeldValidator.JokerStandsFor(meld!, 1, LatAm);
+
+        Assert.NotNull(stands);
+        Assert.Equal(Rank.Five, stands!.Value.Rank);
+        Assert.Equal(Suit.Hearts, stands.Value.Suit);
+    }
+
+    // Build respeta la colocación que le llega: 4-5-6-J se baja tal cual y el
+    // comodín hace de 7, no de 3.
+    [Fact]
+    public void A_joker_laid_down_at_the_end_stays_at_the_end()
+    {
+        var (meld, _) = MeldValidator.Build("m1", "p1", MeldKind.Escalera,
+            [C(Suit.Hearts, Rank.Four), C(Suit.Hearts, Rank.Five), C(Suit.Hearts, Rank.Six), J()], LatAm);
+
+        Assert.NotNull(meld);
+        Assert.True(meld!.Cards[3].IsJoker);
+
+        var stands = MeldValidator.JokerStandsFor(meld, 3, LatAm);
+
+        Assert.NotNull(stands);
+        Assert.Equal(Rank.Seven, stands!.Value.Rank);
+    }
+
+    [Fact]
+    public void The_same_cards_the_other_way_round_make_the_joker_a_three()
+    {
+        var (meld, _) = MeldValidator.Build("m1", "p1", MeldKind.Escalera,
+            [J(), C(Suit.Hearts, Rank.Four), C(Suit.Hearts, Rank.Five), C(Suit.Hearts, Rank.Six)], LatAm);
+
+        var stands = MeldValidator.JokerStandsFor(meld!, 0, LatAm);
+
+        Assert.NotNull(stands);
+        Assert.Equal(Rank.Three, stands!.Value.Rank);
+    }
+
+    [Fact]
+    public void Consecutive_naturals_plus_one_joker_offer_both_ends()
+    {
+        var choice = MeldValidator.EndChoiceFor(
+            [C(Suit.Hearts, Rank.Five), C(Suit.Hearts, Rank.Four), J(), C(Suit.Hearts, Rank.Six)], LatAm);
+
+        Assert.NotNull(choice);
+        Assert.True(choice!.Value.Low[0].IsJoker);
+        Assert.True(choice.Value.High[^1].IsJoker);
+    }
+
+    // Con un hueco que tapar el comodín no tiene elección: va al hueco.
+    [Fact]
+    public void A_joker_filling_a_gap_offers_no_choice()
+    {
+        var choice = MeldValidator.EndChoiceFor(
+            [C(Suit.Hearts, Rank.Four), C(Suit.Hearts, Rank.Six), C(Suit.Hearts, Rank.Seven), J()], LatAm);
+
+        Assert.Null(choice);
+    }
+
+    [Fact]
+    public void A_run_is_checked_in_the_order_it_comes()
+    {
+        var four = C(Suit.Hearts, Rank.Four);
+        var five = C(Suit.Hearts, Rank.Five);
+        var six = C(Suit.Hearts, Rank.Six);
+
+        Assert.True(MeldValidator.IsRunInOrder([four, five, six, J()], LatAm));
+        Assert.True(MeldValidator.IsRunInOrder([J(), four, five, six], LatAm));
+        Assert.False(MeldValidator.IsRunInOrder([four, six, five, J()], LatAm));
+        Assert.False(MeldValidator.IsRunInOrder([four, J(), J(), six], LatAm));
+    }
+
+    [Fact]
+    public void A_natural_card_stands_for_nothing()
+    {
+        var (meld, _) = MeldValidator.Build("m1", "p1", MeldKind.Escalera,
+            [C(Suit.Hearts, Rank.Four), C(Suit.Hearts, Rank.Five), C(Suit.Hearts, Rank.Six), C(Suit.Hearts, Rank.Seven)], LatAm);
+
+        Assert.Null(MeldValidator.JokerStandsFor(meld!, 2, LatAm));
+    }
+
+    [Fact]
     public void A_trio_takes_a_fourth_card_of_the_same_rank()
     {
         var (meld, _) = MeldValidator.Build("m2", "p1", MeldKind.Trio,

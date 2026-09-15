@@ -125,7 +125,13 @@ public sealed class GameRoom : IDisposable
                 if (m.MeldId is null || m.CardId is null)
                     return ActionResult.Fail("Falta la carta o la combinación.");
 
-                return _engine.Extend(playerId, m.MeldId, m.CardId.Value);
+                return _engine.Extend(playerId, m.MeldId, m.CardId.Value, m.Position);
+
+            case MessageType.SwapJoker:
+                if (m.MeldId is null || m.CardId is null)
+                    return ActionResult.Fail("Falta la carta o la escalera.");
+
+                return _engine.SwapJoker(playerId, m.MeldId, m.CardId.Value, m.TargetMeldId, m.Position);
 
             case MessageType.Discard:
                 return m.CardId is null

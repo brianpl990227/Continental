@@ -391,7 +391,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
         return ActionResult.Success;
     }
 
-    public ActionResult Extend(string playerId, string meldId, int cardId)
+    public ActionResult Extend(string playerId, string meldId, int cardId, int? position = null)
     {
         if (State.Phase != GamePhase.Action)
             return ActionResult.Fail("Solo puedes colocar cartas después de robar.");
@@ -422,10 +422,17 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         var card = player.Hand[index];
 
-        if (!MeldValidator.CanExtend(meld, card, State.Options, out var position))
+        var fits = MeldValidator.ExtendPositions(meld, card, State.Options);
+
+        if (fits.Count == 0)
             return ActionResult.Fail($"{card.Label} no encaja ahí.");
 
-        meld.Cards.Insert(position, card);
+        var slot = position ?? fits[0];
+
+        if (!fits.Contains(slot))
+            return ActionResult.Fail($"{card.Label} no encaja por ese lado.");
+
+        meld.Cards.Insert(slot, card);
         player.Hand.RemoveAt(index);
 
         if (meld.Kind == MeldKind.Trio)
@@ -434,6 +441,104 @@ public sealed class GameEngine(GameState state, Random? random = null)
             meld.EscaleraSuit ??= card.Suit;
 
         State.Say($"{player.Name} colocó {card.Label}.");
+        Notify();
+
+        return ActionResult.Success;
+    }
+
+    // Canje del comodín: entregas la carta natural que estaba tapando, te llevas el
+    // comodín y lo colocas en el acto. No se puede guardar en la mano.
+    public ActionResult SwapJoker(string playerId, string meldId, int cardId, string? targetMeldId, int? position)
+    {
+        if (State.Options.JokerSwapMode == JokerSwap.Off)
+            return ActionResult.Fail("En esta variante el comodín se queda donde está.");
+
+        if (State.Phase != GamePhase.Action)
+            return ActionResult.Fail("Solo puedes canjear el comodín después de robar.");
+
+        if (State.Current?.Id != playerId)
+            return ActionResult.Fail("No es tu turno.");
+
+        var player = State.Current;
+
+        if (!player.HasLaidDown)
+            return ActionResult.Fail("Primero tienes que bajarte.");
+
+        var source = State.Table.FirstOrDefault(m => m.Id == meldId);
+
+        if (source is null)
+            return ActionResult.Fail("Esa combinación no existe.");
+
+        if (source.Kind != MeldKind.Escalera)
+            return ActionResult.Fail("Solo se canjea el comodín de una escalera.");
+
+        if (State.Options.JokerSwapMode == JokerSwap.OwnerOnly && source.OwnerId != playerId)
+            return ActionResult.Fail("En esta variante solo el dueño de la escalera puede canjear su comodín.");
+
+        var handIndex = player.Hand.FindIndex(c => c.Id == cardId);
+
+        if (handIndex < 0)
+            return ActionResult.Fail("Esa carta no está en tu mano.");
+
+        var replacement = player.Hand[handIndex];
+
+        if (replacement.IsJoker)
+            return ActionResult.Fail("No puedes canjear un comodín por otro comodín.");
+
+        var jokerIndex = -1;
+
+        for (var i = 0; i < source.Size; i++)
+        {
+            if (MeldValidator.JokerStandsFor(source, i, State.Options) is { } stands
+                && stands.Rank == replacement.Rank && stands.Suit == replacement.Suit)
+            {
+                jokerIndex = i;
+                break;
+            }
+        }
+
+        if (jokerIndex < 0)
+            return ActionResult.Fail($"Ningún comodín de esa escalera está haciendo de {replacement.Label}.");
+
+        var joker = source.Cards[jokerIndex];
+
+        // El comodín liberado tiene que caber en el sitio elegido antes de mover nada.
+        var target = targetMeldId is null
+            ? source
+            : State.Table.FirstOrDefault(m => m.Id == targetMeldId);
+
+        if (target is null)
+            return ActionResult.Fail("Esa combinación no existe.");
+
+        if (target.OwnerId != playerId && !State.Options.CanExtendOpponentMelds)
+            return ActionResult.Fail("El comodín solo puede ir a uno de tus juegos.");
+
+        var probe = target.Clone();
+
+        if (ReferenceEquals(target, source))
+            probe.Cards[jokerIndex] = replacement;
+
+        var fits = MeldValidator.ExtendPositions(probe, joker, State.Options);
+
+        if (fits.Count == 0)
+            return ActionResult.Fail("El comodín no cabe ahí sin romper la escalera.");
+
+        var slot = position ?? fits[0];
+
+        if (!fits.Contains(slot))
+            return ActionResult.Fail("El comodín no cabe por ese lado.");
+
+        source.Cards[jokerIndex] = replacement;
+        source.EscaleraSuit ??= replacement.Suit;
+
+        target.Cards.Insert(slot, joker);
+
+        player.Hand.RemoveAt(handIndex);
+
+        State.Say(ReferenceEquals(target, source)
+            ? $"{player.Name} canjeó el comodín por {replacement.Label}."
+            : $"{player.Name} canjeó el comodín por {replacement.Label} y lo movió de sitio.");
+
         Notify();
 
         return ActionResult.Success;

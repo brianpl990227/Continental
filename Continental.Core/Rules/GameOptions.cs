@@ -2,6 +2,13 @@ using Continental.Core.Model;
 
 namespace Continental.Core.Rules;
 
+public enum JokerSwap
+{
+    Off = 0,
+    OwnerOnly = 1,
+    AnyLaidDownPlayer = 2
+}
+
 public enum RulePreset
 {
     Spain = 0,
@@ -45,6 +52,10 @@ public sealed record GameOptions
 
     public bool CanExtendOpponentMelds { get; init; } = true;
 
+    public JokerSwap JokerSwapMode { get; init; } = JokerSwap.OwnerOnly;
+
+    public bool CanMoveJokerAfterLaydown { get; init; } = true;
+
     public int TurnSeconds { get; init; }
 
     public int MaxStockRecycles { get; init; } = 2;
@@ -57,7 +68,8 @@ public sealed record GameOptions
             StartingCards = 6,
             AceValue = 20,
             AceHighAndLow = true,
-            TrioRequiresDistinctSuits = true
+            TrioRequiresDistinctSuits = true,
+            JokerSwapMode = JokerSwap.OwnerOnly
         },
         _ => new GameOptions
         {
@@ -65,7 +77,8 @@ public sealed record GameOptions
             StartingCards = 7,
             AceValue = 30,
             AceHighAndLow = false,
-            TrioRequiresDistinctSuits = false
+            TrioRequiresDistinctSuits = false,
+            JokerSwapMode = JokerSwap.AnyLaidDownPlayer
         }
     };
 
@@ -103,7 +116,14 @@ public sealed record GameOptions
             ("Comodines seguidos en escalera", NoTwoAdjacentJokersInEscalera ? "Prohibido" : "Permitido"),
             ("Robar de contra", AllowSteal ? $"Sí (+{StealPenaltyCards} de castigo)" : "No"),
             ("Bajarse y cerrar a la vez", $"{CloseSameTurnBonus} pts"),
-            ("Ampliar juegos ajenos", CanExtendOpponentMelds ? "Sí" : "No")
+            ("Ampliar juegos ajenos", CanExtendOpponentMelds ? "Sí" : "No"),
+            ("Canjear comodín bajado", JokerSwapMode switch
+            {
+                JokerSwap.Off => "No",
+                JokerSwap.OwnerOnly => "Solo el dueño de la escalera",
+                _ => "Cualquiera que se haya bajado"
+            }),
+            ("Mover comodín ya bajado", CanMoveJokerAfterLaydown ? "Sí, dentro de tus escaleras" : "No")
         };
         return rows;
     }

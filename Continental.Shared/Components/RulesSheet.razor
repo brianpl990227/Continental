@@ -82,6 +82,35 @@
             repetirse el mismo número dentro de una escalera.
         </p>
 
+        <div class="section-title">El comodín después de bajarse</div>
+
+        <p class="join-info__hint" style="margin:0 0 12px">
+            El comodín es <strong>la única carta que se puede mover</strong> una vez está en la mesa. El
+            resto se queda fija. Para llevártelo tienes que entregar la carta exacta que estaba tapando, y
+            <strong>colocarlo en el acto</strong>: no puedes guardártelo en la mano.
+        </p>
+
+        <div class="compare">
+            <div class="compare__side @(Options.JokerSwapMode == JokerSwap.OwnerOnly ? "compare__side--active" : "")">
+                <div class="compare__head">🇪🇸 España @(Options.JokerSwapMode == JokerSwap.OwnerOnly ? "· en uso" : "")</div>
+                <p><strong>Solo el dueño canjea su comodín.</strong></p>
+                <p class="compare__good">Si la escalera la bajaste tú, das la carta y te llevas el comodín.</p>
+                <p class="compare__bad">La escalera de otro no se toca.</p>
+            </div>
+
+            <div class="compare__side @(Options.JokerSwapMode == JokerSwap.AnyLaidDownPlayer ? "compare__side--active" : "")">
+                <div class="compare__head">🌎 Latinoamérica @(Options.JokerSwapMode == JokerSwap.AnyLaidDownPlayer ? "· en uso" : "")</div>
+                <p><strong>Cualquiera que se haya bajado puede canjearlo.</strong></p>
+                <p class="compare__good">Da igual de quién sea la escalera: si tienes la carta, el comodín es tuyo.</p>
+            </div>
+        </div>
+
+        <p class="join-info__hint" style="margin:12px 0 0">
+            Dos límites que valen en las dos: no puedes dejar <strong>dos comodines juntos</strong>, ni dejar
+            una escalera con menos de @Options.MinEscaleraSize cartas. Y cuando el comodín cabe por los dos
+            extremos, <strong>eliges tú el lado</strong>.
+        </p>
+
         <div class="section-title">Las siete rondas</div>
 
         <div class="rules">
