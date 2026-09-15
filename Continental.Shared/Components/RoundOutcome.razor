@@ -1,0 +1,123 @@
+<div class="outcome outcome--@Tone">
+    <div class="outcome__emoji" aria-hidden="true">@Emoji</div>
+
+    <div class="outcome__title">@Title</div>
+    <div class="outcome__line">@Line</div>
+
+    @if (Points is { } points)
+    {
+        <div class="outcome__points @(IWon || points <= 0 ? "outcome__points--good" : "")">
+            @(points > 0 ? "+" : "")@points
+            <span>@(IsGameOver ? "en total" : "esta ronda")</span>
+        </div>
+    }
+
+    <div class="outcome__actions">
+        <button class="btn btn--grow" @onclick="OnShowScores">Ver puntuaciones</button>
+
+        @if (Advance.HasDelegate)
+        {
+            <button class="btn btn--primary btn--grow" @onclick="Advance">@AdvanceLabel</button>
+        }
+    </div>
+
+    @if (!Advance.HasDelegate)
+    {
+        <div class="outcome__waiting">
+            <span class="spinner"></span>
+            <span>Esperando al anfitrión…</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PlayerView View { get; set; } = default!;
+
+    [Parameter] public bool IsGameOver { get; set; }
+
+    [Parameter] public EventCallback OnShowScores { get; set; }
+
+    [Parameter] public EventCallback Advance { get; set; }
+
+    [Parameter] public string AdvanceLabel { get; set; } = "Siguiente ronda";
+
+    private PlayerSummary? Me => View.Players.FirstOrDefault(p => p.Id == View.YouId);
+
+    private int? Points => IsGameOver
+        ? Me?.TotalScore
+        : Me?.RoundScores is { Count: > 0 } scores ? scores[^1] : null;
+
+    private bool IWon => IsGameOver
+        ? Me is not null && Me.TotalScore == View.Players.Min(p => p.TotalScore)
+        : View.RoundCloserId == View.YouId;
+
+    private bool IWorst
+    {
+        get
+        {
+            if (View.Players.Count < 2)
+                return false;
+
+            if (IsGameOver)
+                return Me is not null && Me.TotalScore == View.Players.Max(p => p.TotalScore);
+
+            var mine = Points;
+
+            return mine is not null
+                   && mine == View.Players.Where(p => p.RoundScores.Count > 0)
+                                          .Max(p => p.RoundScores[^1]);
+        }
+    }
+
+    private string Tone => IWon ? "win" : IWorst ? "lose" : "plain";
+
+    private string Emoji => IWon ? "🎉" : IWorst ? "🫠" : "🃏";
+
+    private string Title => IsGameOver
+        ? IWon ? "¡Ganaste la partida!" : $"Gana {Best?.Name}"
+        : IWon ? "¡Cerraste la ronda!" : $"Ronda {View.RoundIndex + 1} cerrada";
+
+    private PlayerSummary? Best => View.Players.OrderBy(p => p.TotalScore).FirstOrDefault();
+
+    private string Line
+    {
+        get
+        {
+            if (IsGameOver)
+                return IWon
+                    ? "Menos puntos que nadie tras las siete rondas."
+                    : Jab(GameOverJabs);
+
+            var closer = View.Players.FirstOrDefault(p => p.Id == View.RoundCloserId);
+
+            if (closer is null)
+                return "Nadie logró bajarse: todos cuentan su mano.";
+
+            if (IWon)
+                return "Te quedaste sin cartas. Los demás cuentan lo que les sobra.";
+
+            return IWorst ? Jab(RoundJabs) : $"{closer.Name} se quedó sin cartas.";
+        }
+    }
+
+    private string Jab(string[] lines) => lines[Math.Abs(Seed) % lines.Length];
+
+    private int Seed => (View.RoundIndex * 31 + (Points ?? 0) * 7 + View.Players.Count) | 0;
+
+    private static readonly string[] RoundJabs =
+    [
+        "Te has quedado la mano entera. Coleccionar también es un plan.",
+        "Has apostado por la cantidad antes que por la calidad.",
+        "Los comodines esta ronda no eran para ti.",
+        "Bonita mano. Lástima que puntúe en contra.",
+        "Alguien tenía que sujetar las cartas."
+    ];
+
+    private static readonly string[] GameOverJabs =
+    [
+        "Siete rondas sujetando cartas. Un clásico.",
+        "El mazo no te quería, y se le notaba.",
+        "Has perdido, pero con mucho estilo.",
+        "Otra ronda y lo remontabas. Seguro."
+    ];
+}

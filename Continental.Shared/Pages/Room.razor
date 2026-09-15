@@ -1,0 +1,771 @@
+@page "/room"
+@implements IDisposable
+@inject AppState App
+@inject IGameHost Host
+@inject NavigationManager Nav
+@inject GameAudio Audio
+@inject CardFlight Flights
+@inject Confetti Party
+
+@if (View is null)
+{
+    <div class="home">
+        <div class="empty" style="margin-top:36vh">
+            @if (Client is null)
+            {
+                <span>No hay ninguna sala abierta.</span>
+            }
+            else if (Error is not null)
+            {
+                <span style="color:var(--ember);font-weight:650">@Error</span>
+            }
+            else
+            {
+                <span class="spinner"></span>
+                <span>Conectando con la mesa…</span>
+                <span style="font-size:11px">Si tarda, comprueba que el anfitrión sigue en la sala.</span>
+            }
+        </div>
+        <button class="btn btn--primary" style="width:100%;margin-top:16px" @onclick="Leave">Volver al inicio</button>
+    </div>
+}
+else if (View.Phase == GamePhase.Lobby)
+{
+    <div class="home">
+        <div class="sheet__head" style="padding-left:0;padding-right:0">
+            <h1 class="sheet__title">@View.RoomName</h1>
+            <button class="btn btn--ghost btn--icon" @onclick="Leave" aria-label="Salir">✕</button>
+        </div>
+
+        @if (Host.JoinUrl is { } url)
+        {
+            <div class="join-info">
+                <div class="field__label" style="margin:0">Para unirse desde un navegador</div>
+                <div class="join-info__url">@url</div>
+                @if (Host.WebClientReady)
+                {
+                    <div class="join-info__hint">
+                        Quien no tenga la app puede abrir esa dirección en el móvil o el portátil,
+                        siempre que esté en el mismo WiFi. Si no carga, revisa que el cortafuegos
+                        deje entrar conexiones a este equipo.
+                    </div>
+                }
+                else
+                {
+                    <div class="join-info__hint" style="color:var(--ember)">
+                        El cliente para navegador no se pudo preparar en esta compilación, así que
+                        esa dirección mostrará solo un aviso. Los demás todavía pueden unirse
+                        desde la app.
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="section-title">Jugadores (@View.Players.Count/6)</div>
+
+        <div class="lobby__players">
+            @foreach (var player in View.Players.OrderBy(p => p.Seat))
+            {
+                <div class="lobby__player">
+                    <span class="seat__avatar">@Initial(player.Name)</span>
+                    <span style="flex:1">@player.Name</span>
+                    @if (player.IsHost)
+                    {
+                        <span class="lobby__badge">Anfitrión</span>
+                    }
+                    @if (player.IsBot)
+                    {
+                        <span class="lobby__badge">Bot</span>
+                    }
+                    @if (View.YouAreHost && !player.IsHost)
+                    {
+                        <button class="btn btn--ghost btn--icon" style="min-height:32px;width:32px"
+                                @onclick="@(() => Send(new ClientMessage { Type = MessageType.Kick, PlayerId = player.Id }))"
+                                aria-label="Quitar a @player.Name">✕</button>
+                    }
+                </div>
+            }
+
+            @for (var i = View.Players.Count; i < 4; i++)
+            {
+                <div class="lobby__player lobby__player--empty">Sitio libre</div>
+            }
+        </div>
+
+        @if (View.YouAreHost)
+        {
+            <div class="section-title">Añadir un bot</div>
+
+            <div style="display:flex;gap:8px">
+                <button class="btn btn--grow" @onclick="@(() => AddBot(BotLevel.Easy))">Fácil</button>
+                <button class="btn btn--grow" @onclick="@(() => AddBot(BotLevel.Normal))">Normal</button>
+                <button class="btn btn--grow" @onclick="@(() => AddBot(BotLevel.Hard))">Difícil</button>
+            </div>
+
+            <div class="section-title">Reglas</div>
+
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+                <button class="btn btn--grow @(View.Options.Preset == RulePreset.LatinAmerica ? "btn--primary" : "")"
+                        @onclick="@(() => SetPreset(RulePreset.LatinAmerica))">
+                    🌎 Latinoamérica
+                </button>
+                <button class="btn btn--grow @(View.Options.Preset == RulePreset.Spain ? "btn--primary" : "")"
+                        @onclick="@(() => SetPreset(RulePreset.Spain))">
+                    🇪🇸 España
+                </button>
+            </div>
+        }
+
+        <button class="btn" style="width:100%" @onclick="@(() => ShowRules = true)">
+            Ver las reglas de esta sala
+        </button>
+
+        @if (View.YouAreHost)
+        {
+            <button class="btn btn--primary" style="width:100%;margin-top:10px"
+                    disabled="@(View.Players.Count < 2)"
+                    @onclick="@(() => Send(new ClientMessage { Type = MessageType.Start }))">
+                @(View.Players.Count < 2 ? "Faltan jugadores" : "Empezar la partida")
+            </button>
+        }
+        else
+        {
+            <div class="empty" style="margin-top:14px">
+                <span class="spinner"></span>
+                <span>Esperando a que el anfitrión empiece…</span>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="table">
+        <RoundLadder RoundIndex="View.RoundIndex" Options="View.Options" />
+
+        <div class="seats">
+            @foreach (var player in View.Players.Where(p => p.Id != View.YouId).OrderBy(p => p.Seat))
+            {
+                <div class="seat @(player.IsCurrent ? "seat--current" : "") @(player.IsBot ? "seat--bot" : "") @(player.IsConnected ? "" : "seat--offline")"
+                     data-seat="@player.Id">
+                    <span class="seat__avatar">@Initial(player.Name)</span>
+                    <span class="seat__info">
+                        <span class="seat__name">@player.Name</span>
+                        <span class="seat__stats">
+                            <span>@player.CardCount 🂠</span>
+                            <span>@player.TotalScore</span>
+                            @if (player.HasLaidDown)
+                            {
+                                <span class="seat__down">bajado</span>
+                            }
+                        </span>
+                    </span>
+                </div>
+            }
+        </div>
+
+        <div class="piles">
+            <div class="pile @(CanDraw ? "pile--actionable" : "")">
+                <div id="pile-stock"
+                     class="pile__stack @(View.StockCount == 0 ? "pile__stack--empty" : "")"
+                     role="@(CanDraw ? "button" : null)"
+                     tabindex="@(CanDraw ? 0 : null)"
+                     aria-label="Robar del mazo"
+                     @onclick="@(() => Draw(DrawSource.Stock))">
+                    @if (View.StockCount > 0)
+                    {
+                        <CardView Card="Hidden" FaceDown="true" />
+                    }
+                    else
+                    {
+                        <span class="pile__empty">vacío</span>
+                    }
+                </div>
+                <span class="pile__label">Mazo <span class="pile__count">@View.StockCount</span></span>
+            </div>
+
+            <div class="pile @(CanDraw && View.DiscardTop is not null ? "pile--actionable" : "")">
+                <div id="pile-discard"
+                     class="pile__stack @(View.DiscardTop is null ? "pile__stack--empty" : "")"
+                     role="@(CanDraw ? "button" : null)"
+                     tabindex="@(CanDraw ? 0 : null)"
+                     aria-label="Robar del pozo"
+                     @onclick="@(() => Draw(DrawSource.Discard))">
+                    @if (View.DiscardTop is { } top)
+                    {
+                        <CardView Card="top" />
+                    }
+                    else
+                    {
+                        <span class="pile__empty">vacío</span>
+                    }
+                </div>
+                <span class="pile__label">Pozo <span class="pile__count">@View.DiscardCount</span></span>
+            </div>
+        </div>
+
+        <div class="melds">
+            @if (View.Table.Count == 0)
+            {
+                <div class="melds__empty">Nadie se ha bajado todavía</div>
+            }
+            else
+            {
+                @foreach (var meld in View.Table)
+                {
+                    var droppable = CanExtend;
+
+                    <div class="meld @(droppable ? "meld--droppable" : "")"
+                         role="@(droppable ? "button" : null)"
+                         tabindex="@(droppable ? 0 : null)"
+                         @onclick="@(() => Extend(meld.Id))">
+                        <div class="meld__head">
+                            <span class="meld__kind">@(meld.Kind == MeldKind.Trio ? "TRÍO" : "ESCALERA")</span>
+                            <span>@meld.OwnerName</span>
+                        </div>
+                        <div class="meld__cards">
+                            @foreach (var card in meld.Cards)
+                            {
+                                <CardView Card="card" />
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="log">
+            @if (View.Log.Count > 0)
+            {
+                <span class="log__line" @key="View.Log.Count">@View.Log[^1]</span>
+            }
+        </div>
+
+        <HandFan Cards="DisplayHand" Selected="Selected" OnToggle="ToggleCard" Dealing="Dealing" />
+
+        <div class="actions">
+            <button class="btn btn--icon" @onclick="Sort" aria-label="Ordenar la mano"
+                    title="@(SortMode == HandSort.BySuit ? "Ordenado por palo" : "Ordenado por número")">
+                @(SortMode == HandSort.BySuit ? "♠" : "#")
+            </button>
+
+            <button class="btn btn--icon" @onclick="@(() => ShowRules = true)" aria-label="Reglas">?</button>
+            <button class="btn btn--icon" @onclick="@(() => ShowScores = true)" aria-label="Puntuaciones">📊</button>
+
+            <button class="btn btn--icon" @onclick="ToggleMute"
+                    aria-label="@(Audio.Muted ? "Activar sonido" : "Silenciar")">
+                @(Audio.Muted ? "🔇" : "🔊")
+            </button>
+
+            <button class="btn btn--grow @(SelectionIsContract ? "btn--primary" : "")"
+                    disabled="@(!CanTryLayDown)" @onclick="LayDown">
+                Bajarme
+                <span class="btn__hint">@View.ContractCode</span>
+            </button>
+
+            <button class="btn btn--grow @(CanDiscard ? "btn--danger" : "")"
+                    disabled="@(!CanDiscard)" @onclick="Discard">
+                Tirar
+            </button>
+        </div>
+
+        @if (View.Steal is { YouCanClaim: true } steal)
+        {
+            <div class="steal" role="alertdialog" aria-label="Puedes robar de contra">
+                <span class="steal__title">¡Puedes robar de contra!</span>
+                <div class="steal__card">
+                    <CardView Card="steal.Card" />
+                </div>
+                <span class="join-info__hint" style="text-align:center">
+                    Te llevas esta carta y @View.Options.StealPenaltyCards más de castigo.
+                </span>
+                <div class="steal__timer">
+                    <div class="steal__timer-fill"
+                         style="width:@(steal.SecondsLeft * 100 / Math.Max(1, View.Options.StealWindowSeconds))%"></div>
+                </div>
+                <div style="display:flex;gap:8px;width:100%">
+                    <button class="btn btn--grow" @onclick="@(() => Send(new ClientMessage { Type = MessageType.ClaimSteal }))">
+                        Robar (@steal.SecondsLeft s)
+                    </button>
+                </div>
+            </div>
+        }
+
+        @if (Error is not null)
+        {
+            <div class="toast" @onclick="ClearError">@Error</div>
+        }
+        else if (Hint is not null)
+        {
+            <div class="toast" @onclick="@(() => Hint = null)">@Hint</div>
+        }
+
+        @if (View.Phase == GamePhase.RoundEnd && !ShowScores)
+        {
+            <RoundOutcome View="View" OnShowScores="@(() => ShowScores = true)"
+                          Advance="@(View.YouAreHost ? EventCallback.Factory.Create(this, NextRound) : default)"
+                          AdvanceLabel="Siguiente ronda" />
+        }
+        else if (View.Phase == GamePhase.GameOver && !ShowScores)
+        {
+            <RoundOutcome View="View" IsGameOver="true" OnShowScores="@(() => ShowScores = true)"
+                          Advance="@(View.YouAreHost ? EventCallback.Factory.Create(this, PlayAgain) : default)"
+                          AdvanceLabel="Jugar otra vez" />
+        }
+
+    </div>
+}
+
+@if (View is not null && ShowRules)
+{
+    <RulesSheet Options="View.Options" OnClose="@(() => ShowRules = false)" />
+}
+
+@if (View is not null && ShowScores)
+{
+    <ScoreSheet Players="View.Players" Title="@ScoresTitle" OnClose="@(() => ShowScores = false)">
+        <Footer>
+            @if (View.Phase is GamePhase.RoundEnd or GamePhase.GameOver)
+            {
+                @if (View.YouAreHost)
+                {
+                    <button class="btn btn--primary" style="width:100%;margin-bottom:8px"
+                            @onclick="@(View.Phase == GamePhase.GameOver ? PlayAgain : NextRound)">
+                        @(View.Phase == GamePhase.GameOver ? "Jugar otra vez" : "Siguiente ronda")
+                    </button>
+                }
+                @if (View.Phase == GamePhase.GameOver)
+                {
+                    <button class="btn" style="width:100%" @onclick="Leave">Salir de la sala</button>
+                }
+            }
+        </Footer>
+    </ScoreSheet>
+}
+
+@code {
+    private HashSet<int> Selected = [];
+    private HandSort SortMode = HandSort.BySuit;
+    private bool ShowRules;
+    private bool ShowScores;
+    private bool Dealing;
+    private int LastRound = -1;
+    private int LastHandCount = -1;
+
+    private int LastSonifiedRound = -1;
+    private int LastTableCount = -1;
+    private int LastDiscardCount = -1;
+    private int LastStealSecond = -1;
+    private bool WasMyTurn;
+    private GamePhase LastPhase = GamePhase.Lobby;
+    private string? LastErrorHeard;
+
+    private HashSet<int>? PrevHandIds;
+    private int PrevDiscardCount = -1;
+    private readonly List<Flight> Pending = [];
+    private double[]? DiscardOrigin;
+
+    private static readonly Card Hidden = new(-1, Suit.Spades, Rank.Two);
+
+    private IGameClient? Client => App.Client;
+
+    private PlayerView? View => Client?.View;
+
+    private string? Error => Client?.LastError;
+
+    private bool CanDraw => View is { YourTurn: true, Phase: GamePhase.Draw };
+
+    private bool CanDiscard => View is { YourTurn: true, Phase: GamePhase.Action } && Selected.Count == 1;
+
+    private string? Hint;
+
+    private bool SelectionIsContract;
+
+    private bool CanTryLayDown => View is { YourTurn: true, Phase: GamePhase.Action }
+                                  && !(Me?.HasLaidDown ?? false)
+                                  && Selected.Count > 0;
+
+    private bool CanExtend => View is { YourTurn: true, Phase: GamePhase.Action }
+                              && Selected.Count == 1
+                              && (Me?.HasLaidDown ?? false);
+
+    private PlayerSummary? Me => View?.Players.FirstOrDefault(p => p.Id == View.YouId);
+
+    private string ScoresTitle => View is null
+        ? "Puntuaciones"
+        : View.Phase == GamePhase.GameOver
+            ? $"Gana {Winner}"
+            : View.Phase == GamePhase.RoundEnd
+                ? $"Fin de la ronda {View.RoundIndex + 1}"
+                : "Puntuaciones";
+
+    private Task NextRound() => Send(new ClientMessage { Type = MessageType.NextRound });
+
+    private Task PlayAgain() => Send(new ClientMessage { Type = MessageType.PlayAgain });
+
+    private string Winner => View is null
+        ? ""
+        : View.Players.OrderBy(p => p.TotalScore).FirstOrDefault()?.Name ?? "";
+
+    protected override void OnInitialized()
+    {
+        if (Client is null)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        Client.Changed += OnChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Audio.InitAsync();
+
+            Audio.Unlock();
+
+            await Flights.InitAsync();
+            await Party.InitAsync();
+
+            StateHasChanged();
+            return;
+        }
+
+        if (Pending.Count > 0)
+        {
+            var batch = Pending.ToList();
+            Pending.Clear();
+
+            Flights.Play(batch);
+        }
+    }
+
+    private void OnChanged() => InvokeAsync(() =>
+    {
+        if (View is { } view)
+        {
+            if (view.RoundIndex != LastRound && view.Phase == GamePhase.Draw)
+            {
+                LastRound = view.RoundIndex;
+                Dealing = true;
+                _ = ClearDealingSoon();
+            }
+
+            if (view.Hand.Count != LastHandCount)
+            {
+                LastHandCount = view.Hand.Count;
+                Selected.RemoveWhere(id => view.Hand.All(c => c.Id != id));
+                RefreshSelection();
+            }
+
+            Sonify(view);
+            QueueFlights(view);
+        }
+
+        StateHasChanged();
+    });
+
+    private void QueueFlights(PlayerView view)
+    {
+        var handIds = view.Hand.Select(c => c.Id).ToHashSet();
+
+        if (PrevHandIds is not null && !Dealing)
+        {
+            var gained = handIds.Except(PrevHandIds).ToList();
+
+            if (gained.Count is > 0 and <= 3)
+            {
+                var fromDiscard = PrevDiscardCount >= 0 && view.DiscardCount < PrevDiscardCount;
+
+                for (var i = 0; i < gained.Count; i++)
+                {
+                    var source = i == 0 && fromDiscard ? CardFlight.Discard : CardFlight.Stock;
+
+                    Pending.Add(new Flight(
+                        CardFlight.CardAt(gained[i]),
+                        source,
+                        FromRect: null,
+                        Flip: source == CardFlight.Stock));
+                }
+            }
+        }
+
+        PrevHandIds = handIds;
+
+        if (PrevDiscardCount >= 0 && view.DiscardCount > PrevDiscardCount && view.DiscardTop is not null)
+        {
+            if (view.DiscardOwnerId == view.YouId && DiscardOrigin is not null)
+                Pending.Add(new Flight(CardFlight.DiscardCard, null, DiscardOrigin, Flip: false));
+            else if (view.DiscardOwnerId is { } owner)
+                Pending.Add(new Flight(CardFlight.DiscardCard, CardFlight.Seat(owner), null, Flip: false));
+
+            DiscardOrigin = null;
+        }
+
+        PrevDiscardCount = view.DiscardCount;
+    }
+
+    private void Sonify(PlayerView view)
+    {
+        if (LastPhase == GamePhase.Lobby && view.Phase != GamePhase.Lobby)
+            Audio.Play(Sfx.Shuffle);
+        else if (view.RoundIndex != LastSonifiedRound && view.Phase == GamePhase.Draw)
+            Audio.Play(Sfx.Shuffle);
+
+        LastSonifiedRound = view.RoundIndex;
+
+        var myTurn = view.YourTurn && view.Phase is GamePhase.Draw or GamePhase.Action;
+
+        if (myTurn && !WasMyTurn)
+            Audio.Play(Sfx.Turn);
+
+        WasMyTurn = myTurn;
+
+        if (LastDiscardCount >= 0 && view.DiscardCount > LastDiscardCount)
+            Audio.Play(Sfx.Place);
+
+        LastDiscardCount = view.DiscardCount;
+
+        if (LastTableCount >= 0 && view.Table.Count > LastTableCount)
+        {
+            var mineIsNewest = view.Table.Count > 0 && view.Table[^1].OwnerId == view.YouId;
+            Audio.Play(mineIsNewest ? Sfx.LayDown : Sfx.OpponentLayDown);
+        }
+
+        LastTableCount = view.Table.Count;
+
+        if (view.Steal is { YouCanClaim: true } steal)
+        {
+            if (LastPhase != GamePhase.StealWindow)
+                Audio.Play(Sfx.Steal);
+            else if (steal.SecondsLeft != LastStealSecond && steal.SecondsLeft > 0)
+                Audio.Play(Sfx.Tick);
+
+            LastStealSecond = steal.SecondsLeft;
+        }
+        else
+        {
+            LastStealSecond = -1;
+        }
+
+        if (view.Phase != LastPhase)
+        {
+            if (view.Phase == GamePhase.RoundEnd)
+            {
+                ShowScores = false;
+                Celebrate(view, isGameOver: false);
+            }
+            else if (view.Phase == GamePhase.GameOver)
+            {
+                ShowScores = false;
+                Celebrate(view, isGameOver: true);
+            }
+        }
+
+        LastPhase = view.Phase;
+
+        if (Error is not null && Error != LastErrorHeard)
+            Audio.Play(Sfx.Error);
+
+        LastErrorHeard = Error;
+    }
+
+    private async Task ClearDealingSoon()
+    {
+        await Task.Delay(1200);
+        Dealing = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string Initial(string name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
+
+    private async Task Send(ClientMessage message)
+    {
+        if (Client is not null)
+            await Client.SendAsync(message);
+    }
+
+    private void ClearError() => Client?.ClearError();
+
+    private Task AddBot(BotLevel level)
+        => Send(new ClientMessage { Type = MessageType.AddBot, BotLevel = (int)level });
+
+    private Task SetPreset(RulePreset preset)
+        => Send(new ClientMessage { Type = MessageType.SetOptions, Options = GameOptions.ForPreset(preset) });
+
+    private Task Draw(DrawSource source)
+    {
+        if (!CanDraw)
+            return Task.CompletedTask;
+
+        Audio.Play(Sfx.Draw);
+
+        return Send(new ClientMessage { Type = MessageType.Draw, Source = (int)source });
+    }
+
+    private async Task ToggleMute()
+    {
+        await Audio.ToggleMuteAsync();
+        StateHasChanged();
+    }
+
+    private void ToggleCard(int cardId)
+    {
+        if (!Selected.Add(cardId))
+            Selected.Remove(cardId);
+
+        Hint = null;
+        RefreshSelection();
+        Audio.Play(Sfx.Select);
+    }
+
+    private IReadOnlyList<Card> DisplayHand
+        => View is null ? [] : HandSorter.Sort(View.Hand, SortMode);
+
+    private void Sort() => SortMode = SortMode == HandSort.BySuit ? HandSort.ByRank : HandSort.BySuit;
+
+    private async Task LayDown()
+    {
+        if (View is not { } view)
+            return;
+
+        Hint = null;
+
+        if (Selected.Count == 0)
+            return;
+
+        var contract = RoundContract.Standard[view.RoundIndex];
+        var picked = view.Hand.Where(c => Selected.Contains(c.Id)).ToList();
+        var chosen = HandAnalyzer.FindContract(picked, contract, view.Options);
+
+        if (chosen is not null)
+        {
+            await SendLayDown(chosen);
+            return;
+        }
+
+        Hint = Explain(picked, contract, view.Options);
+        Audio.Play(Sfx.Error);
+    }
+
+    private void Celebrate(PlayerView view, bool isGameOver)
+    {
+        var me = view.Players.FirstOrDefault(p => p.Id == view.YouId);
+
+        var won = isGameOver
+            ? me is not null && me.TotalScore == view.Players.Min(p => p.TotalScore)
+            : view.RoundCloserId == view.YouId;
+
+        var worst = me is not null && view.Players.Count > 1 && (isGameOver
+            ? me.TotalScore == view.Players.Max(p => p.TotalScore)
+            : me.RoundScores.Count > 0
+              && me.RoundScores[^1] == view.Players.Where(p => p.RoundScores.Count > 0)
+                                                   .Max(p => p.RoundScores[^1]));
+
+        if (won)
+        {
+            Audio.Play(Sfx.Celebrate);
+            Party.Burst(isGameOver ? 150 : 100);
+        }
+        else if (worst)
+        {
+            Audio.Play(Sfx.Flop);
+        }
+        else
+        {
+            Audio.Play(Sfx.RoundEnd);
+        }
+    }
+
+    private void RefreshSelection()
+    {
+        if (View is not { } view || Selected.Count == 0)
+        {
+            SelectionIsContract = false;
+            return;
+        }
+
+        var picked = view.Hand.Where(c => Selected.Contains(c.Id)).ToList();
+
+        SelectionIsContract = HandAnalyzer.FindContract(
+            picked, RoundContract.Standard[view.RoundIndex], view.Options) is not null;
+    }
+
+    private async Task SendLayDown(List<MeldSpec> specs)
+    {
+        await Send(new ClientMessage
+        {
+            Type = MessageType.LayDown,
+            Melds = specs.Select(s => new MeldSpecDto((int)s.Kind, s.CardIds.ToList())).ToList()
+        });
+
+        Selected.Clear();
+    }
+
+    private static string Explain(List<Card> picked, RoundContract contract, GameOptions options)
+    {
+        if (picked.Count < contract.Trios * options.MinTrioSize + contract.Escaleras * options.MinEscaleraSize)
+            return $"Faltan cartas: {contract.Describe()} necesita al menos "
+                   + $"{contract.Trios * options.MinTrioSize + contract.Escaleras * options.MinEscaleraSize}.";
+
+        var naturals = picked.Where(c => !c.IsJoker).ToList();
+
+        foreach (var group in naturals.GroupBy(c => c.Rank)
+                                      .Where(g => g.Count() >= options.MinTrioSize)
+                                      .OrderByDescending(g => g.Count()))
+        {
+            if (MeldValidator.TryTrio(group.ToList(), options) is { Ok: false, Error: { } error })
+                return error;
+        }
+
+        foreach (var group in naturals.GroupBy(c => c.Suit)
+                                      .Where(g => g.Count() >= options.MinEscaleraSize))
+        {
+            if (MeldValidator.TryEscalera(group.ToList(), options) is { Ok: false, Error: { } error })
+                return error;
+        }
+
+        return $"Con esas cartas no se forma {contract.Describe()}.";
+    }
+
+    private async Task Extend(string meldId)
+    {
+        if (!CanExtend)
+            return;
+
+        var cardId = Selected.First();
+        await Send(new ClientMessage { Type = MessageType.Extend, MeldId = meldId, CardId = cardId });
+
+        Selected.Clear();
+    }
+
+    private async Task Discard()
+    {
+        if (!CanDiscard)
+            return;
+
+        var cardId = Selected.First();
+
+        DiscardOrigin = await Flights.CaptureAsync(CardFlight.CardAt(cardId));
+
+        await Send(new ClientMessage { Type = MessageType.Discard, CardId = cardId });
+
+        Selected.Clear();
+    }
+
+    private async Task Leave()
+    {
+        await App.LeaveAsync();
+        await Host.StopAsync();
+
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        if (Client is not null)
+            Client.Changed -= OnChanged;
+    }
+}

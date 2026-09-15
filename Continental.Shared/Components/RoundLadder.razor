@@ -1,0 +1,27 @@
+<div class="ladder">
+    <div class="ladder__rungs" role="list" aria-label="Rondas de la partida">
+        @for (var i = 0; i < RoundContract.Standard.Count; i++)
+        {
+            var contract = RoundContract.Standard[i];
+            var state = i < RoundIndex ? "rung--done" : i == RoundIndex ? "rung--current" : "";
+
+            <div class="rung @state" role="listitem"
+                 aria-current="@(i == RoundIndex ? "step" : null)"
+                 aria-label="Ronda @(i + 1): @contract.Describe()">
+                <span class="rung__code">@contract.Code</span>
+                <span class="rung__n">@Options.CardsForRound(i)</span>
+            </div>
+        }
+    </div>
+
+    <div class="ladder__meta">
+        <span class="ladder__contract">@RoundContract.Standard[Math.Clamp(RoundIndex, 0, 6)].Describe()</span>
+        <span class="ladder__round">Ronda @(RoundIndex + 1)/@RoundContract.Standard.Count</span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int RoundIndex { get; set; }
+
+    [Parameter, EditorRequired] public GameOptions Options { get; set; } = default!;
+}

@@ -1,0 +1,45 @@
+<div class="hand">
+    <div class="hand__rail" role="group" aria-label="Tu mano, @Cards.Count cartas">
+        @for (var i = 0; i < Cards.Count; i++)
+        {
+            var index = i;
+            var card = Cards[index];
+            var selected = Selected.Contains(card.Id);
+
+            <CardView Card="card"
+                      Extra="@($"{(selected ? "card--selected" : "")} {(Dealing ? "card--dealing" : "")}")"
+                      Style="@($"--i:{index};--n:{Cards.Count};--fan:{Fan};--spread:{Spread}")"
+                      OnClick="@(() => Toggle(card.Id))" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<Card> Cards { get; set; } = [];
+
+    [Parameter] public HashSet<int> Selected { get; set; } = [];
+
+    [Parameter] public EventCallback<int> OnToggle { get; set; }
+
+    [Parameter] public bool Dealing { get; set; }
+
+    private Task Toggle(int cardId) => OnToggle.InvokeAsync(cardId);
+
+    private string Fan => Cards.Count switch
+    {
+        <= 6 => "5",
+        <= 9 => "3.8",
+        <= 12 => "2.6",
+        _ => "1.7"
+    };
+
+    private string Spread => Cards.Count switch
+    {
+        <= 5 => "18",
+        <= 7 => "24",
+        <= 9 => "30",
+        <= 11 => "36",
+        <= 13 => "41",
+        _ => "45"
+    };
+}

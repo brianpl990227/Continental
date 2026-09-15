@@ -1,0 +1,236 @@
+@page "/"
+@implements IDisposable
+@inject AppState App
+@inject IGameHost Host
+@inject IRoomDiscovery Discovery
+@inject IGameJoiner Joiner
+@inject NavigationManager Nav
+@inject UpdateChecker Updates
+
+<div class="home">
+    <div class="home__hero" aria-hidden="true">
+        <div class="home__fan">
+            @for (var i = 0; i < HeroCards.Length; i++)
+            {
+                <CardView Card="HeroCards[i]" Style="@($"--i:{i};--lift:{Math.Abs(i - 2) * 5}px")" />
+            }
+        </div>
+    </div>
+
+    <h1 class="home__title">Continental</h1>
+    <p class="home__sub">Siete rondas. Tríos y escaleras. La mesa la pone quien crea la sala.</p>
+
+    <div class="field">
+        <label class="field__label" for="name">Tu nombre</label>
+        <input id="name" class="input" maxlength="18" placeholder="¿Cómo te llamas?"
+               value="@App.PlayerName"
+               @onchange="@(e => SaveName(e.Value?.ToString() ?? ""))" />
+    </div>
+
+    @if (Busy is not null)
+    {
+        <div class="empty" style="margin-top:8px">
+            <span class="spinner"></span>
+            <span>@Busy</span>
+        </div>
+    }
+    else
+    {
+        @if (Host is not NoGameHost)
+        {
+            <button class="btn btn--primary" style="width:100%" disabled="@(!HasName)" @onclick="CreateRoom">
+                Crear una sala
+            </button>
+        }
+
+        <div class="section-title">Salas en tu red</div>
+
+        @if (!Discovery.IsSupported)
+        {
+            <div class="empty">
+                <span>Desde el navegador no se pueden buscar salas.</span>
+                <span>Pide la dirección al anfitrión y escríbela abajo.</span>
+            </div>
+        }
+        else if (Discovery.Rooms.Count == 0)
+        {
+            <div class="empty">
+                <span class="spinner"></span>
+                <span>Buscando salas en el WiFi…</span>
+            </div>
+        }
+        else
+        {
+            <div class="card-list">
+                @foreach (var room in Discovery.Rooms)
+                {
+                    <button class="room" disabled="@(!HasName)" @onclick="@(() => Join(room.Address, room.Port))">
+                        <div class="room__info">
+                            <div class="room__name">@room.RoomName</div>
+                            <div class="room__meta">
+                                <span>@room.HostName</span>
+                                <span class="tag">@room.Players/@room.MaxPlayers</span>
+                                <span class="tag tag--rules">@room.Ruleset</span>
+                                @if (room.InProgress)
+                                {
+                                    <span class="tag tag--live">En juego</span>
+                                }
+                            </div>
+                        </div>
+                        <span aria-hidden="true">›</span>
+                    </button>
+                }
+            </div>
+        }
+
+        <div class="section-title">Entrar con una dirección</div>
+
+        <div class="field">
+            <input class="input" placeholder="192.168.1.34:8080" @bind="Manual" @bind:event="oninput" />
+        </div>
+
+        <button class="btn" style="width:100%" disabled="@(!HasName || string.IsNullOrWhiteSpace(Manual))"
+                @onclick="JoinManual">
+            Unirme
+        </button>
+    }
+
+    @if (Error is not null)
+    {
+        <div class="toast" style="position:static;transform:none;margin-top:16px;text-align:center">@Error</div>
+    }
+
+    <div class="version">
+        @if (Updates.Latest is { IsNewer: true } update)
+        {
+            <button class="version__update" @onclick="OpenUpdate">
+                <span class="version__badge">Actualización</span>
+                <span class="version__jump">@Updates.Current → @update.Version</span>
+                <span class="version__go">Descargar ›</span>
+            </button>
+        }
+        else
+        {
+            <span>Versión @Updates.Current@(Updates.Build is { Length: > 0 } b ? $" ({b})" : "")</span>
+
+            @if (Updates.Latest is { } latest)
+            {
+                <span class="version__ok">· al día (última: @latest.Version)</span>
+            }
+            else if (Updates.Checked && Updates.Installable)
+            {
+                <span class="version__ok">· no se pudo comprobar</span>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private string Manual = "";
+    private string? Busy;
+    private string? Error;
+
+    private bool HasName => !string.IsNullOrWhiteSpace(App.PlayerName);
+
+    private static readonly Card[] HeroCards =
+    [
+        new(0, Suit.Spades, Rank.Ace),
+        new(1, Suit.Hearts, Rank.King),
+        Card.Joker(2),
+        new(3, Suit.Diamonds, Rank.Seven),
+        new(4, Suit.Clubs, Rank.Ten)
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        App.Changed += OnChanged;
+        Discovery.Changed += OnChanged;
+
+        if (!Discovery.IsSupported && Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var baseUri))
+            Manual = baseUri.IsDefaultPort ? baseUri.Host : $"{baseUri.Host}:{baseUri.Port}";
+
+        await App.LoadAsync();
+        await Discovery.StartAsync();
+
+        if (Updates.Installable)
+        {
+            await Updates.CheckAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenUpdate() => await Updates.OpenLatestAsync();
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task SaveName(string name) => await App.SetNameAsync(name);
+
+    private async Task CreateRoom()
+    {
+        Error = null;
+        Busy = "Levantando la sala…";
+        StateHasChanged();
+
+        try
+        {
+            var roomName = $"Mesa de {App.PlayerName}";
+            var client = await Host.StartAsync(roomName, App.PlayerName, App.PreferredOptions);
+
+            App.ForgetSeat();
+            App.SetClient(client);
+            Nav.NavigateTo("/room");
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo crear la sala: {ex.Message}";
+            Busy = null;
+        }
+    }
+
+    private async Task JoinManual()
+    {
+        var text = Manual.Trim();
+
+        if (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            text = text[7..];
+
+        text = text.TrimEnd('/');
+
+        var parts = text.Split(':', StringSplitOptions.RemoveEmptyEntries);
+        var address = parts[0];
+        var port = parts.Length > 1 && int.TryParse(parts[1], out var p) ? p : 8080;
+
+        await Join(address, port);
+    }
+
+    private async Task Join(string address, int port)
+    {
+        Error = null;
+        Busy = $"Conectando con {address}…";
+        StateHasChanged();
+
+        try
+        {
+            var seat = App.LastRoom is { } last && last.Address == address && last.Port == port
+                ? App.LastPlayerId
+                : null;
+
+            var client = await Joiner.JoinAsync(address, port, App.PlayerName, seat);
+
+            App.SetClient(client, address, port);
+            Nav.NavigateTo("/room");
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo conectar: {ex.Message}";
+            Busy = null;
+        }
+    }
+
+    public void Dispose()
+    {
+        App.Changed -= OnChanged;
+        Discovery.Changed -= OnChanged;
+        _ = Discovery.StopAsync();
+    }
+}

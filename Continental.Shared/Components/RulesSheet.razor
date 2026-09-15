@@ -1,0 +1,148 @@
+<div class="sheet">
+    <div class="sheet__head">
+        <h2 class="sheet__title">Reglas de esta sala</h2>
+        <button class="btn btn--ghost btn--icon" @onclick="OnClose" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="sheet__body">
+        <span class="rules__badge">
+            <span aria-hidden="true">@(Options.Preset == RulePreset.Spain ? "🇪🇸" : Options.Preset == RulePreset.LatinAmerica ? "🌎" : "⚙️")</span>
+            Variante @Options.DisplayName
+        </span>
+
+        <p class="join-info__hint" style="margin:0 0 18px">
+            El anfitrión elige la variante antes de empezar. Estas son las reglas con las que
+            se juega esta partida.
+        </p>
+
+        <div class="section-title">Cómo se juega</div>
+
+        <ol class="how">
+            <li>Roba una carta del <strong>mazo</strong> o del <strong>pozo</strong>.</li>
+            <li>Si quieres, <strong>bájate</strong> poniendo en la mesa lo que pide la ronda.</li>
+            <li>Ya bajado, puedes <strong>colocar</strong> cartas sueltas en los juegos de la mesa.</li>
+            <li><strong>Descarta</strong> una carta para pasar el turno.</li>
+            <li>Te quedas sin cartas al descartar: <strong>cierras</strong> la ronda.</li>
+        </ol>
+
+        <p class="join-info__hint" style="margin:12px 0 0">
+            Gana quien tenga <strong>menos puntos</strong> tras las siete rondas. Las cartas que
+            te queden en la mano suman en tu contra.
+        </p>
+
+        <div class="section-title">Qué es un trío</div>
+
+        <p class="join-info__hint" style="margin:0 0 12px">
+            Tres o más cartas del <strong>mismo número</strong>. Aquí es donde las dos variantes
+            no se parecen, y es el motivo más habitual de que el botón de bajarse no se active.
+        </p>
+
+        <div class="compare">
+            <div class="compare__side @(Options.Preset == RulePreset.Spain ? "compare__side--active" : "")">
+                <div class="compare__head">🇪🇸 España @(Options.Preset == RulePreset.Spain ? "· en uso" : "")</div>
+                <p><strong>Todas de palo distinto.</strong> Tres reyes valen solo si son de tres palos diferentes.</p>
+                <p class="compare__bad">K♠ K♠ K♥ no vale: dos picas.</p>
+                <p class="compare__good">K♠ K♥ K♦ sí vale.</p>
+                <p>Como máximo cuatro cartas naturales, una por palo, más comodines.</p>
+            </div>
+
+            <div class="compare__side @(Options.Preset == RulePreset.LatinAmerica ? "compare__side--active" : "")">
+                <div class="compare__head">🌎 Latinoamérica @(Options.Preset == RulePreset.LatinAmerica ? "· en uso" : "")</div>
+                <p><strong>El palo da igual.</strong> Basta con que coincida el número.</p>
+                <p class="compare__good">K♠ K♠ K♥ sí vale.</p>
+                <p>Se juega con dos barajas, así que la misma carta puede repetirse en el trío.</p>
+                <p>Sin límite de cartas.</p>
+            </div>
+        </div>
+
+        <div class="section-title">Qué es una escalera</div>
+
+        <p class="join-info__hint" style="margin:0 0 12px">
+            @Options.MinEscaleraSize o más cartas <strong>consecutivas del mismo palo</strong>. Eso es igual en
+            las dos variantes; lo que cambia es el as.
+        </p>
+
+        <div class="compare">
+            <div class="compare__side @(Options.Preset == RulePreset.Spain ? "compare__side--active" : "")">
+                <div class="compare__head">🇪🇸 España @(Options.Preset == RulePreset.Spain ? "· en uso" : "")</div>
+                <p><strong>El as sirve de alto, de bajo y de bisagra.</strong></p>
+                <p class="compare__good">A♠ 2♠ 3♠ 4♠ · J♠ Q♠ K♠ A♠ · Q♠ K♠ A♠ 2♠</p>
+            </div>
+
+            <div class="compare__side @(Options.Preset == RulePreset.LatinAmerica ? "compare__side--active" : "")">
+                <div class="compare__head">🌎 Latinoamérica @(Options.Preset == RulePreset.LatinAmerica ? "· en uso" : "")</div>
+                <p><strong>El as solo es alto.</strong></p>
+                <p class="compare__good">J♠ Q♠ K♠ A♠</p>
+                <p class="compare__bad">A♠ 2♠ 3♠ 4♠ no vale.</p>
+            </div>
+        </div>
+
+        <p class="join-info__hint" style="margin:12px 0 0">
+            En ambas: los comodines tapan huecos, pero <strong>nunca dos seguidos</strong>, y no puede
+            repetirse el mismo número dentro de una escalera.
+        </p>
+
+        <div class="section-title">Las siete rondas</div>
+
+        <div class="rules">
+            @for (var i = 0; i < RoundContract.Standard.Count; i++)
+            {
+                var contract = RoundContract.Standard[i];
+
+                <div class="rules__row">
+                    <span class="rules__label">
+                        Ronda @(i + 1) · @Options.CardsForRound(i) cartas
+                    </span>
+                    <span class="rules__value">@contract.Describe()</span>
+                </div>
+            }
+        </div>
+
+        <div class="section-title">Detalles de la variante</div>
+
+        <div class="rules">
+            @foreach (var (label, value) in Options.Summary())
+            {
+                <div class="rules__row">
+                    <span class="rules__label">@label</span>
+                    <span class="rules__value">@value</span>
+                </div>
+            }
+        </div>
+
+        <div class="section-title">Cuánto vale cada carta</div>
+
+        <div class="rules">
+            <div class="rules__row">
+                <span class="rules__label">Comodín</span>
+                <span class="rules__value">@Options.JokerValue pts</span>
+            </div>
+            <div class="rules__row">
+                <span class="rules__label">As</span>
+                <span class="rules__value">@Options.AceValue pts</span>
+            </div>
+            <div class="rules__row">
+                <span class="rules__label">K, Q, J</span>
+                <span class="rules__value">@Options.FaceValue pts</span>
+            </div>
+            <div class="rules__row">
+                <span class="rules__label">2 al 10</span>
+                <span class="rules__value">Su número</span>
+            </div>
+            <div class="rules__row">
+                <span class="rules__label">Bajarse y cerrar a la vez</span>
+                <span class="rules__value scores__neg">@Options.CloseSameTurnBonus pts</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="sheet__foot">
+        <button class="btn btn--primary btn--grow" style="width:100%" @onclick="OnClose">Entendido</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public GameOptions Options { get; set; } = default!;
+
+    [Parameter] public EventCallback OnClose { get; set; }
+}

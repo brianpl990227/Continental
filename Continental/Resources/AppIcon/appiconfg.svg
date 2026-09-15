@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="paper" x1="0" y1="0" x2="0.35" y2="1">
+            <stop offset="0%" stop-color="#FFFDF8" />
+            <stop offset="100%" stop-color="#E8E1D4" />
+        </linearGradient>
+        <linearGradient id="paperDim" x1="0" y1="0" x2="0.35" y2="1">
+            <stop offset="0%" stop-color="#EFE9DC" />
+            <stop offset="100%" stop-color="#D3CBBA" />
+        </linearGradient>
+        <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#F7C558" />
+            <stop offset="100%" stop-color="#C9A227" />
+        </linearGradient>
+    </defs>
+
+    <g transform="translate(228 238) scale(1.14) translate(-228 -238)">
+        <g transform="rotate(-29 228 348)">
+            <rect x="170" y="152" width="116" height="162" rx="15" fill="url(#paperDim)" />
+        </g>
+
+        <g transform="rotate(29 228 348)">
+            <rect x="170" y="152" width="116" height="162" rx="15" fill="url(#paperDim)" />
+        </g>
+
+        <g>
+            <rect x="170" y="142" width="116" height="162" rx="15" fill="url(#paper)" />
+
+            <g fill="url(#amber)">
+                <circle cx="209" cy="228" r="27" />
+                <circle cx="247" cy="228" r="27" />
+                <path d="M228 172 L272 236 L184 236 Z" />
+                <path d="M219 268 C224 252 232 252 237 268 Z" />
+            </g>
+        </g>
+    </g>
+</svg>

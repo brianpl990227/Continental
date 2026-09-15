@@ -1,0 +1,138 @@
+<div class="card @(FaceDown ? "card--facedown" : "") @(IsRed ? "card--red" : "") @(Card.Rank == Rank.Ten ? "card--ten" : "") @Extra"
+     style="@Style"
+     data-card-id="@Card.Id"
+     role="@(Clickable ? "button" : null)"
+     tabindex="@(Clickable ? 0 : null)"
+     aria-label="@Describe()"
+     @onclick="OnClick"
+     @onclick:stopPropagation="StopPropagation">
+
+    <div class="card__face" aria-hidden="@FaceDown">
+        @if (Card.IsJoker)
+        {
+            <div class="card__joker">
+                <span class="card__joker-star">★</span>
+            </div>
+            <span class="card__index card__index--tl card__index--joker">★</span>
+            <span class="card__index card__index--br card__index--joker" aria-hidden="true">★</span>
+        }
+        else
+        {
+            <span class="card__index card__index--tl">
+                <span>@Card.RankLabel</span>
+                <span class="card__index-suit">@Card.SuitSymbol</span>
+            </span>
+            <span class="card__index card__index--br" aria-hidden="true">
+                <span>@Card.RankLabel</span>
+                <span class="card__index-suit">@Card.SuitSymbol</span>
+            </span>
+
+            @if (Pips is { Count: > 0 })
+            {
+                <span class="card__pips" aria-hidden="true">
+                    @foreach (var pip in Pips)
+                    {
+                        <span class="pip @(pip.Flip ? "pip--flip" : "")"
+                              style="grid-column:@pip.Col;grid-row:@pip.Row">@Card.SuitSymbol</span>
+                    }
+                </span>
+            }
+            else if (Card.Rank == Rank.Ace)
+            {
+                <span class="card__pips" aria-hidden="true">
+                    <span class="card__ace" style="grid-column:2;grid-row:3/6">@Card.SuitSymbol</span>
+                </span>
+            }
+            else
+            {
+                <span class="card__court" aria-hidden="true">
+                    <span class="card__court-letter">@Card.RankLabel</span>
+                    <span class="card__court-letter card__court-letter--flip">@Card.RankLabel</span>
+                </span>
+            }
+        }
+    </div>
+
+    <div class="card__back" aria-hidden="true"></div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Card Card { get; set; }
+
+    [Parameter] public bool FaceDown { get; set; }
+
+    [Parameter] public string? Extra { get; set; }
+
+    [Parameter] public string? Style { get; set; }
+
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    [Parameter] public bool StopPropagation { get; set; }
+
+    private bool Clickable => OnClick.HasDelegate;
+
+    private bool IsRed => !Card.IsJoker && Card.IsRed;
+
+    private record Pip(int Col, int Row, bool Flip);
+
+    private List<Pip>? Pips => Layouts.GetValueOrDefault((int)Card.Rank);
+
+    private string Describe()
+    {
+        if (FaceDown)
+            return "Carta boca abajo";
+
+        if (Card.IsJoker)
+            return "Comodín";
+
+        var suit = Card.Suit switch
+        {
+            Suit.Clubs => "tréboles",
+            Suit.Diamonds => "diamantes",
+            Suit.Hearts => "corazones",
+            Suit.Spades => "picas",
+            _ => ""
+        };
+
+        var rank = Card.Rank switch
+        {
+            Rank.Ace => "As",
+            Rank.Jack => "Jota",
+            Rank.Queen => "Reina",
+            Rank.King => "Rey",
+            _ => ((int)Card.Rank).ToString()
+        };
+
+        return $"{rank} de {suit}";
+    }
+
+    private static readonly Dictionary<int, List<Pip>> Layouts = new()
+    {
+        [2] = [new(2, 1, false), new(2, 7, true)],
+        [3] = [new(2, 1, false), new(2, 4, false), new(2, 7, true)],
+        [4] = [new(1, 1, false), new(3, 1, false), new(1, 7, true), new(3, 7, true)],
+        [5] = [new(1, 1, false), new(3, 1, false), new(2, 4, false), new(1, 7, true), new(3, 7, true)],
+        [6] = [new(1, 1, false), new(3, 1, false), new(1, 4, false), new(3, 4, false), new(1, 7, true), new(3, 7, true)],
+        [7] =
+        [
+            new(1, 1, false), new(3, 1, false), new(2, 3, false),
+            new(1, 4, false), new(3, 4, false), new(1, 7, true), new(3, 7, true)
+        ],
+        [8] =
+        [
+            new(1, 1, false), new(3, 1, false), new(2, 3, false),
+            new(1, 4, false), new(3, 4, false), new(2, 5, true),
+            new(1, 7, true), new(3, 7, true)
+        ],
+        [9] =
+        [
+            new(1, 1, false), new(3, 1, false), new(1, 3, false), new(3, 3, false),
+            new(2, 4, false), new(1, 5, true), new(3, 5, true), new(1, 7, true), new(3, 7, true)
+        ],
+        [10] =
+        [
+            new(1, 1, false), new(3, 1, false), new(2, 2, false), new(1, 3, false), new(3, 3, false),
+            new(1, 5, true), new(3, 5, true), new(2, 6, true), new(1, 7, true), new(3, 7, true)
+        ]
+    };
+}

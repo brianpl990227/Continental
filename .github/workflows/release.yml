@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - run: dotnet test Continental.Core.Tests -c Release --logger "console;verbosity=minimal"
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - run: dotnet workload install maui-android wasm-tools
+
+      - name: Restaurar la clave de firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Falta el secreto ANDROID_KEYSTORE_BASE64. Sin el no se puede firmar el APK."
+            exit 1
+          fi
+
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > build/continental.keystore || true
+
+          if [ ! -s build/continental.keystore ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 no decodifica. Vuelve a subirlo con: gh secret set ANDROID_KEYSTORE_BASE64 --body (contenido de build/keystore.base64), en una sola linea y sin BOM."
+            exit 1
+          fi
+
+          if [ "$(head -c 4 build/continental.keystore | xxd -p)" != "feedfeed" ]; then
+            echo "::error::El fichero decodificado no es un keystore JKS: le falta la firma FEEDFEED. El secreto llego truncado o alterado."
+            exit 1
+          fi
+
+          echo "Keystore restaurado: $(stat -c%s build/continental.keystore) bytes."
+
+      - name: Construir el APK
+        shell: pwsh
+        env:
+          CONTINENTAL_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: ./build/publish.ps1 -Target android -AllAbis -Version $(${{ github.run_number }} + 100)
+
+      - name: Comprobar que el APK sirve para 32 y 64 bits
+        run: |
+          FALTA=0
+
+          for ABI in arm64-v8a armeabi-v7a x86_64; do
+            if ! unzip -l dist/Continental.apk | grep -q "lib/$ABI/"; then
+              echo "::error::El APK no trae lib/$ABI. En un movil de esa arquitectura la instalacion falla sin explicacion."
+              FALTA=1
+            fi
+          done
+
+          if [ "$FALTA" != 0 ]; then
+            echo "Arquitecturas encontradas:"
+            unzip -l dist/Continental.apk | grep -oE "lib/[a-z0-9_-]+/" | sort -u
+            exit 1
+          fi
+
+          echo "APK universal correcto:"
+          unzip -l dist/Continental.apk | grep -oE "lib/[a-z0-9_-]+/" | sort -u
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/Continental.apk
+          if-no-files-found: error
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - run: dotnet workload install maui-windows wasm-tools
+
+      - name: Construir la app de Windows
+        shell: pwsh
+        run: ./build/publish.ps1 -Target windows -Version $(${{ github.run_number }} + 100)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/Continental-Windows.zip
+          if-no-files-found: error
+
+  release:
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publicar la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v1.0.$(( ${{ github.run_number }} + 100 ))"
+
+          cat > notes.md <<'EOF'
+          - **Continental.apk** — APK universal (arm64-v8a, armeabi-v7a y x86_64). Vale para cualquier movil desde Android 7, sea de 32 o de 64 bits.
+          - **Continental-Windows.zip** — Windows 10/11 x64, autocontenido: no hace falta instalar .NET ni el Windows App SDK.
+
+          Si el movil dice "La aplicacion no esta instalada", ya tienes una copia firmada con otra clave: desinstalala antes.
+          EOF
+
+          echo "" >> notes.md
+          echo "Compilado desde ${{ github.sha }}." >> notes.md
+
+          gh release create "$TAG" \
+            --title "Continental $TAG" \
+            --notes-file notes.md \
+            dist/Continental.apk \
+            dist/Continental-Windows.zip

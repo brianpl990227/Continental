@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Continental</title>
+    <base href="/" />
+
+    <!-- These three are rewritten by the SDK at publish time and are what make the
+         fingerprinted runtime resolvable. Without them the boot manifest is never
+         emitted and the app hangs on this page forever. -->
+    <link rel="preload" id="webassembly" />
+    <script type="importmap"></script>
+
+    <link rel="stylesheet" href="_content/Continental.Shared/continental.css" />
+    <link rel="icon" href="data:," />
+</head>
+
+<body>
+    <div id="app">
+        <div class="home">
+            <div class="empty" style="margin-top:38vh">
+                <span class="spinner"></span>
+                <span>Cargando la mesa…</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" data-nosnippet>
+        Algo se rompió. <a href="." class="reload">Recargar</a>
+    </div>
+
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+
+</html>

@@ -1,0 +1,68 @@
+<div class="sheet">
+    <div class="sheet__head">
+        <h2 class="sheet__title">@Title</h2>
+        @if (OnClose.HasDelegate)
+        {
+            <button class="btn btn--ghost btn--icon" @onclick="OnClose" aria-label="Cerrar">✕</button>
+        }
+    </div>
+
+    <div class="sheet__body">
+        <div style="overflow-x:auto">
+            <table class="scores">
+                <thead>
+                    <tr>
+                        <th scope="col">Jugador</th>
+                        @for (var i = 0; i < RoundContract.Standard.Count; i++)
+                        {
+                            <th scope="col" title="@RoundContract.Standard[i].Describe()">@RoundContract.Standard[i].Code</th>
+                        }
+                        <th scope="col">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var player in Ordered)
+                    {
+                        <tr class="@(player.TotalScore == Best ? "scores__leader" : "")">
+                            <td>@player.Name</td>
+                            @for (var r = 0; r < RoundContract.Standard.Count; r++)
+                            {
+                                var played = r < player.RoundScores.Count;
+                                var value = played ? player.RoundScores[r] : (int?)null;
+
+                                <td class="@(value < 0 ? "scores__neg" : "")">
+                                    @(played ? value.ToString() : "·")
+                                </td>
+                            }
+                            <td class="scores__total">@player.TotalScore</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <p class="join-info__hint" style="margin-top:16px">
+            Gana quien acumule menos puntos. Las cartas que te quedan en la mano al cerrar
+            una ronda son las que suman.
+        </p>
+    </div>
+
+    @if (Footer is not null)
+    {
+        <div class="sheet__foot">@Footer</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PlayerSummary> Players { get; set; } = [];
+
+    [Parameter] public string Title { get; set; } = "Puntuaciones";
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    private IEnumerable<PlayerSummary> Ordered => Players.OrderBy(p => p.TotalScore);
+
+    private int Best => Players.Count == 0 ? 0 : Players.Min(p => p.TotalScore);
+}

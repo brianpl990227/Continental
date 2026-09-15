@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Continental.Server</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pure C# web server: no Kestrel, so this same code runs on Android. -->
+    <PackageReference Include="GenHTTP.Core" Version="11.0.1" />
+    <PackageReference Include="GenHTTP.Modules.Websockets" Version="11.0.1" />
+    <PackageReference Include="GenHTTP.Modules.StaticWebsites" Version="11.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Continental.Core\Continental.Core.csproj" />
+    <ProjectReference Include="..\Continental.Shared\Continental.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

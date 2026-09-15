@@ -1,0 +1,16 @@
+<Router AppAssembly="typeof(Program).Assembly"
+        AdditionalAssemblies="new[] { typeof(Continental.Shared.Pages.Home).Assembly }">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(MainLayout)">
+            <div class="home">
+                <h1 class="home__title">Nada por aquí</h1>
+                <p class="home__sub">Esa página no existe.</p>
+                <a class="btn btn--primary" style="width:100%;text-decoration:none" href="">Volver al inicio</a>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>
