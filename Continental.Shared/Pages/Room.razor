@@ -15,6 +15,11 @@
             {
                 <span>No hay ninguna sala abierta.</span>
             }
+            else if (Link == ConnectionState.Reconnecting)
+            {
+                <span class="spinner"></span>
+                <span>Reconectando con el anfitrión@(Attempt > 1 ? $" (intento {Attempt})" : "")…</span>
+            }
             else if (Error is not null)
             {
                 <span style="color:var(--ember);font-weight:650">@Error</span>
@@ -290,6 +295,21 @@ else
             </div>
         }
 
+        @if (Link == ConnectionState.Reconnecting)
+        {
+            <div class="relink" role="status">
+                <span class="spinner spinner--sm"></span>
+                <span>Reconectando con el anfitrión@(Attempt > 1 ? $" (intento {Attempt})" : "")…</span>
+            </div>
+        }
+        else if (Link == ConnectionState.Lost)
+        {
+            <div class="relink relink--lost" role="alert">
+                <span>Se perdió la conexión con el anfitrión.</span>
+                <button class="btn btn--sm" @onclick="Leave">Volver al inicio</button>
+            </div>
+        }
+
         @if (Error is not null)
         {
             <div class="toast" @onclick="ClearError">@Error</div>
@@ -371,6 +391,10 @@ else
     private PlayerView? View => Client?.View;
 
     private string? Error => Client?.LastError;
+
+    private ConnectionState Link => Client?.Connection ?? ConnectionState.Connected;
+
+    private int Attempt => Client?.ReconnectAttempt ?? 0;
 
     private bool CanDraw => View is { YourTurn: true, Phase: GamePhase.Draw };
 

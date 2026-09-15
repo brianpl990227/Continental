@@ -22,9 +22,12 @@ public static class MessageType
     public const string PlayAgain = "playagain";
     public const string Leave = "leave";
 
+    public const string Ping = "ping";
+
     public const string Welcome = "welcome";
     public const string State = "state";
     public const string Error = "error";
+    public const string Pong = "pong";
 }
 
 public sealed record MeldSpecDto(int Kind, List<int> CardIds);
