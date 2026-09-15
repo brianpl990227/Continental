@@ -4,6 +4,13 @@ using Continental.Core.Rules;
 
 namespace Continental.Shared.Services;
 
+public enum ConnectionState
+{
+    Connected,
+    Reconnecting,
+    Lost
+}
+
 public interface IGameClient : IAsyncDisposable
 {
     string PlayerId { get; }
@@ -11,6 +18,10 @@ public interface IGameClient : IAsyncDisposable
     PlayerView? View { get; }
 
     bool IsConnected { get; }
+
+    ConnectionState Connection { get; }
+
+    int ReconnectAttempt { get; }
 
     string? LastError { get; }
 

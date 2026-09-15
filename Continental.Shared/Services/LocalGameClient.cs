@@ -22,6 +22,10 @@ public sealed class LocalGameClient : IGameClient
 
     public bool IsConnected => true;
 
+    public ConnectionState Connection => ConnectionState.Connected;
+
+    public int ReconnectAttempt => 0;
+
     public string? LastError { get; private set; }
 
     public event Action? Changed;
