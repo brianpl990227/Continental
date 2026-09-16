@@ -148,7 +148,7 @@ else
         <div class="seats">
             @foreach (var player in View.Players.Where(p => p.Id != View.YouId).OrderBy(p => p.Seat))
             {
-                <div class="seat @(player.IsCurrent ? "seat--current" : "") @(player.IsBot ? "seat--bot" : "") @(player.IsConnected ? "" : "seat--offline")"
+                <div class="seat seat--s@(Accent(player.Seat)) @(player.IsCurrent ? "seat--current" : "") @(player.IsBot ? "seat--bot" : "") @(player.IsConnected ? "" : "seat--offline")"
                      data-seat="@player.Id">
                     <span class="seat__avatar">@Initial(player.Name)</span>
                     <span class="seat__info">
@@ -216,14 +216,17 @@ else
                 @foreach (var meld in View.Table)
                 {
                     var droppable = CanExtend;
+                    var mine = meld.OwnerId == View.YouId;
 
-                    <div class="meld @(droppable ? "meld--droppable" : "")"
+                    <div class="meld meld--s@(Accent(SeatOf(meld.OwnerId))) @(droppable ? "meld--droppable" : "") @(mine ? "meld--mine" : "")"
                          role="@(droppable ? "button" : null)"
                          tabindex="@(droppable ? 0 : null)"
                          @onclick="@(() => Extend(meld.Id))">
                         <div class="meld__head">
-                            <span class="meld__kind">@(meld.Kind == MeldKind.Trio ? "TRÍO" : "ESCALERA")</span>
-                            <span>@meld.OwnerName</span>
+                            <span class="meld__kind">@(meld.Kind == MeldKind.Trio ? "TRÍO" : "ESCALERA") @meld.Cards.Count</span>
+                            <span class="meld__owner">
+                                <span class="meld__dot" aria-hidden="true"></span>@(mine ? "Tú" : meld.OwnerName)
+                            </span>
                         </div>
                         <div class="meld__cards">
                             @foreach (var card in meld.Cards)
@@ -377,6 +380,7 @@ else
 
 @code {
     private HashSet<int> Selected = [];
+    private readonly List<int> PickOrder = [];
     private HandSort SortMode = HandSort.BySuit;
     private bool ShowRules;
     private bool ShowScores;
@@ -426,6 +430,11 @@ else
                               && (Me?.HasLaidDown ?? false);
 
     private PlayerSummary? Me => View?.Players.FirstOrDefault(p => p.Id == View.YouId);
+
+    private static int Accent(int seat) => ((seat % 6) + 6) % 6;
+
+    private int SeatOf(string playerId)
+        => View?.Players.FirstOrDefault(p => p.Id == playerId)?.Seat ?? 0;
 
     private string ScoresTitle => View is null
         ? "Puntuaciones"
@@ -493,6 +502,7 @@ else
             {
                 LastHandCount = view.Hand.Count;
                 Selected.RemoveWhere(id => view.Hand.All(c => c.Id != id));
+                PickOrder.RemoveAll(id => !Selected.Contains(id));
                 RefreshSelection();
             }
 
@@ -650,8 +660,13 @@ else
 
     private void ToggleCard(int cardId)
     {
-        if (!Selected.Add(cardId))
+        if (Selected.Add(cardId))
+            PickOrder.Add(cardId);
+        else
+        {
             Selected.Remove(cardId);
+            PickOrder.Remove(cardId);
+        }
 
         Hint = null;
         RefreshSelection();
@@ -674,8 +689,16 @@ else
             return;
 
         var contract = RoundContract.Standard[view.RoundIndex];
-        var picked = view.Hand.Where(c => Selected.Contains(c.Id)).ToList();
-        var chosen = HandAnalyzer.FindContract(picked, contract, view.Options);
+        var picked = Picked(view);
+
+        if (picked.Count >= view.Hand.Count)
+        {
+            Hint = "Guarda una carta para tirar: no puedes bajar la mano entera.";
+            Audio.Play(Sfx.Error);
+            return;
+        }
+
+        var chosen = HandAnalyzer.FindExactContract(picked, contract, view.Options);
 
         if (chosen is not null)
         {
@@ -724,10 +747,30 @@ else
             return;
         }
 
-        var picked = view.Hand.Where(c => Selected.Contains(c.Id)).ToList();
+        var picked = Picked(view);
 
-        SelectionIsContract = HandAnalyzer.FindContract(
-            picked, RoundContract.Standard[view.RoundIndex], view.Options) is not null;
+        SelectionIsContract = picked.Count < view.Hand.Count
+                              && HandAnalyzer.FindExactContract(
+                                  picked, RoundContract.Standard[view.RoundIndex], view.Options) is not null;
+    }
+
+    private List<Card> Picked(PlayerView view)
+    {
+        var picked = new List<Card>();
+
+        foreach (var id in PickOrder)
+        {
+            foreach (var card in view.Hand)
+            {
+                if (card.Id != id)
+                    continue;
+
+                picked.Add(card);
+                break;
+            }
+        }
+
+        return picked;
     }
 
     // Antes de bajarse: si en alguna escalera el comodín puede ir a los dos extremos,
@@ -779,14 +822,35 @@ else
             Melds = specs.Select(s => new MeldSpecDto((int)s.Kind, s.CardIds.ToList())).ToList()
         });
 
+        ClearSelection();
+    }
+
+    private void ClearSelection()
+    {
         Selected.Clear();
+        PickOrder.Clear();
+        SelectionIsContract = false;
     }
 
     private static string Explain(List<Card> picked, RoundContract contract, GameOptions options)
     {
-        if (picked.Count < contract.Trios * options.MinTrioSize + contract.Escaleras * options.MinEscaleraSize)
-            return $"Faltan cartas: {contract.Describe()} necesita al menos "
-                   + $"{contract.Trios * options.MinTrioSize + contract.Escaleras * options.MinEscaleraSize}.";
+        var minimum = HandAnalyzer.MinimumCards(contract, options);
+
+        if (picked.Count < minimum)
+            return $"Faltan cartas: {contract.Describe()} necesita al menos {minimum}.";
+
+        if (HandAnalyzer.FindContract(picked, contract, options) is { } partial)
+        {
+            var inside = partial.SelectMany(m => m.CardIds).ToHashSet();
+            var spare = picked.Where(c => !inside.Contains(c.Id)).ToList();
+
+            if (spare.Count > 0)
+                return $"{string.Join(" ", spare.Select(c => c.Label))} "
+                       + (spare.Count == 1 ? "no encaja" : "no encajan")
+                       + $" en {contract.Describe()}: "
+                       + (spare.Count == 1 ? "quítala" : "quítalas")
+                       + " de la selección o añade las que faltan.";
+        }
 
         var naturals = picked.Where(c => !c.IsJoker).ToList();
 
@@ -921,7 +985,7 @@ else
             Position = position
         });
 
-        Selected.Clear();
+        ClearSelection();
     }
 
     private async Task SendSwap(string meldId, int cardId)
@@ -933,7 +997,7 @@ else
             CardId = cardId
         });
 
-        Selected.Clear();
+        ClearSelection();
     }
 
     private async Task Discard()
@@ -947,7 +1011,7 @@ else
 
         await Send(new ClientMessage { Type = MessageType.Discard, CardId = cardId });
 
-        Selected.Clear();
+        ClearSelection();
     }
 
     private async Task Leave()

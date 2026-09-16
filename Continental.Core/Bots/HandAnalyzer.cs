@@ -78,6 +78,206 @@ public static class HandAnalyzer
         return Dedupe(results);
     }
 
+    public static List<MeldSpec>? FindExactContract(IReadOnlyList<Card> selection, RoundContract contract, GameOptions options)
+    {
+        if (selection.Count < MinimumCards(contract, options))
+            return null;
+
+        return SplitInSelectionOrder(selection, contract, options)
+               ?? SplitAnywhere(selection, contract, options);
+    }
+
+    public static int MinimumCards(RoundContract contract, GameOptions options)
+        => contract.Trios * options.MinTrioSize + contract.Escaleras * options.MinEscaleraSize;
+
+    public static List<Card>? Arrange(MeldKind kind, IReadOnlyList<Card> cards, GameOptions options)
+    {
+        if (kind == MeldKind.Trio)
+            return MeldValidator.TryTrio(cards, options) is { Ok: true, Arranged: { } trio } ? trio : null;
+
+        if (MeldValidator.IsRunInOrder(cards, options))
+            return [.. cards];
+
+        return MeldValidator.TryEscalera(cards, options) is { Ok: true, Arranged: { } run } ? run : null;
+    }
+
+    private static List<MeldSpec>? SplitInSelectionOrder(IReadOnlyList<Card> selection, RoundContract contract, GameOptions options)
+    {
+        var chosen = new List<MeldSpec>();
+
+        return Step(0, contract.Trios, contract.Escaleras) ? chosen : null;
+
+        bool Step(int from, int trios, int escaleras)
+        {
+            if (from == selection.Count)
+                return trios == 0 && escaleras == 0;
+
+            if (trios + escaleras == 0)
+                return false;
+
+            for (var take = selection.Count - from; take >= 1; take--)
+            {
+                var segment = new List<Card>();
+
+                for (var i = from; i < from + take; i++)
+                    segment.Add(selection[i]);
+
+                if (trios > 0 && Take(MeldKind.Trio, segment, from + take, trios - 1, escaleras))
+                    return true;
+
+                if (escaleras > 0 && Take(MeldKind.Escalera, segment, from + take, trios, escaleras - 1))
+                    return true;
+            }
+
+            return false;
+        }
+
+        bool Take(MeldKind kind, List<Card> segment, int next, int trios, int escaleras)
+        {
+            if (Arrange(kind, segment, options) is not { } arranged)
+                return false;
+
+            chosen.Add(new MeldSpec(kind, arranged.Select(c => c.Id).ToList()));
+
+            if (Step(next, trios, escaleras))
+                return true;
+
+            chosen.RemoveAt(chosen.Count - 1);
+
+            return false;
+        }
+    }
+
+    private sealed record MeldOption(MeldKind Kind, List<int> Slots, List<int> CardIds);
+
+    private static List<MeldSpec>? SplitAnywhere(IReadOnlyList<Card> selection, RoundContract contract, GameOptions options)
+    {
+        var candidates = MeldsWithin(selection, contract, options);
+        var used = new bool[selection.Count];
+        var chosen = new List<MeldSpec>();
+
+        return Step(contract.Trios, contract.Escaleras, selection.Count) ? chosen : null;
+
+        bool Step(int trios, int escaleras, int left)
+        {
+            if (left == 0)
+                return trios == 0 && escaleras == 0;
+
+            if (trios + escaleras == 0)
+                return false;
+
+            var anchor = Array.IndexOf(used, false);
+
+            foreach (var candidate in candidates)
+            {
+                var wanted = candidate.Kind == MeldKind.Trio ? trios : escaleras;
+
+                if (wanted == 0 || !candidate.Slots.Contains(anchor) || candidate.Slots.Any(i => used[i]))
+                    continue;
+
+                foreach (var slot in candidate.Slots)
+                    used[slot] = true;
+
+                chosen.Add(new MeldSpec(candidate.Kind, candidate.CardIds));
+
+                var nextTrios = candidate.Kind == MeldKind.Trio ? trios - 1 : trios;
+                var nextEscaleras = candidate.Kind == MeldKind.Escalera ? escaleras - 1 : escaleras;
+
+                if (Step(nextTrios, nextEscaleras, left - candidate.Slots.Count))
+                    return true;
+
+                chosen.RemoveAt(chosen.Count - 1);
+
+                foreach (var slot in candidate.Slots)
+                    used[slot] = false;
+            }
+
+            return false;
+        }
+    }
+
+    private static List<MeldOption> MeldsWithin(IReadOnlyList<Card> selection, RoundContract contract, GameOptions options)
+    {
+        var results = new List<MeldOption>();
+        var jokers = Slots(selection, c => c.IsJoker);
+        var naturals = Slots(selection, c => !c.IsJoker);
+        var wilds = Subsets(jokers).ToList();
+
+        if (contract.Trios > 0)
+        {
+            Collect(MeldKind.Trio, [], options.MinTrioSize);
+
+            foreach (var group in naturals.GroupBy(i => selection[i].Rank))
+                Collect(MeldKind.Trio, [.. group], options.MinTrioSize);
+        }
+
+        if (contract.Escaleras > 0)
+        {
+            foreach (var group in naturals.GroupBy(i => selection[i].Suit))
+                Collect(MeldKind.Escalera, [.. group], options.MinEscaleraSize);
+        }
+
+        return results;
+
+        void Collect(MeldKind kind, List<int> group, int min)
+        {
+            foreach (var picked in Subsets(group))
+            {
+                if (picked.Count == 0 && group.Count > 0)
+                    continue;
+
+                if (kind == MeldKind.Escalera && picked.Select(i => selection[i].Rank).Distinct().Count() != picked.Count)
+                    continue;
+
+                foreach (var wild in wilds)
+                {
+                    if (picked.Count + wild.Count < min)
+                        continue;
+
+                    var slots = new List<int>(picked);
+                    slots.AddRange(wild);
+
+                    if (Arrange(kind, slots.Select(i => selection[i]).ToList(), options) is not { } arranged)
+                        continue;
+
+                    results.Add(new MeldOption(kind, slots, arranged.Select(c => c.Id).ToList()));
+                }
+            }
+        }
+    }
+
+    private static List<int> Slots(IReadOnlyList<Card> selection, Func<Card, bool> keep)
+    {
+        var slots = new List<int>();
+
+        for (var i = 0; i < selection.Count; i++)
+        {
+            if (keep(selection[i]))
+                slots.Add(i);
+        }
+
+        return slots;
+    }
+
+    private static IEnumerable<List<int>> Subsets(List<int> source)
+    {
+        if (source.Count > 16)
+            yield break;
+
+        for (var mask = 0; mask < 1 << source.Count; mask++)
+        {
+            var subset = new List<int>();
+
+            for (var i = 0; i < source.Count; i++)
+            {
+                if ((mask & 1 << i) != 0)
+                    subset.Add(source[i]);
+            }
+
+            yield return subset;
+        }
+    }
+
     public static List<MeldSpec>? FindContract(IReadOnlyList<Card> hand, RoundContract contract, GameOptions options)
         => FindContract(FindTrios(hand, options), FindEscaleras(hand, options), contract);
 

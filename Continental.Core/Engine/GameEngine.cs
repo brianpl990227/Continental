@@ -369,6 +369,9 @@ public sealed class GameEngine(GameState state, Random? random = null)
                 return ActionResult.Fail("Esa carta no está en tu mano.");
         }
 
+        if (player.Hand.Count - used.Count < 1)
+            return ActionResult.Fail("Guarda una carta para descartar: no puedes bajar la mano entera.");
+
         var built = new List<Meld>();
 
         foreach (var spec in specs)
