@@ -42,6 +42,15 @@ public sealed class PlayerState
     public List<int> RoundScores { get; init; } = [];
 }
 
+public enum MoveKind
+{
+    TookDiscard = 0,
+    Stole = 1,
+    Discarded = 2
+}
+
+public sealed record PublicMove(string PlayerId, Card Card, MoveKind Kind);
+
 public sealed class StealOffer
 {
     public required Card Card { get; init; }
@@ -84,6 +93,8 @@ public sealed class GameState
     public int StockRecycles { get; set; }
 
     public string? LastCloserId { get; set; }
+
+    public List<PublicMove> History { get; init; } = [];
 
     public List<string> Log { get; init; } = [];
 

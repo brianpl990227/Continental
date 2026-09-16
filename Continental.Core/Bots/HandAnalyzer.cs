@@ -82,89 +82,73 @@ public static class HandAnalyzer
         => FindContract(FindTrios(hand, options), FindEscaleras(hand, options), contract);
 
     public static List<MeldSpec>? FindContract(List<List<Card>> trios, List<List<Card>> escaleras, RoundContract contract)
+        => FindContracts(trios, escaleras, contract, 1).FirstOrDefault();
+
+    public static List<List<MeldSpec>> FindContracts(IReadOnlyList<Card> hand, RoundContract contract, GameOptions options, int limit = 64)
+        => FindContracts(FindTrios(hand, options), FindEscaleras(hand, options), contract, limit);
+
+    public static List<List<MeldSpec>> FindContracts(List<List<Card>> trios, List<List<Card>> escaleras, RoundContract contract, int limit)
     {
+        var solutions = new List<List<MeldSpec>>();
+
         if (trios.Count < contract.Trios || escaleras.Count < contract.Escaleras)
-            return null;
+            return solutions;
 
         var chosen = new List<(MeldKind Kind, List<Card> Cards)>();
+        var used = new HashSet<int>();
 
-        return Search(0, 0, []) ? chosen.Select(c => new MeldSpec(c.Kind, c.Cards.Select(x => x.Id).ToList())).ToList() : null;
+        Search(0, 0, 0, 0);
 
-        bool Search(int triosDone, int escalerasDone, HashSet<int> used)
+        return solutions;
+
+        void Search(int triosDone, int escalerasDone, int escaleraFrom, int trioFrom)
         {
+            if (solutions.Count >= limit)
+                return;
+
             if (triosDone == contract.Trios && escalerasDone == contract.Escaleras)
-                return true;
+            {
+                solutions.Add(chosen.Select(c => new MeldSpec(c.Kind, c.Cards.Select(x => x.Id).ToList())).ToList());
+                return;
+            }
 
             if (escalerasDone < contract.Escaleras)
             {
-                foreach (var candidate in escaleras)
+                for (var i = escaleraFrom; i < escaleras.Count; i++)
                 {
+                    var candidate = escaleras[i];
+
                     if (candidate.Any(c => used.Contains(c.Id)))
                         continue;
 
                     foreach (var c in candidate) used.Add(c.Id);
                     chosen.Add((MeldKind.Escalera, candidate));
 
-                    if (Search(triosDone, escalerasDone + 1, used))
-                        return true;
+                    Search(triosDone, escalerasDone + 1, i + 1, trioFrom);
 
                     chosen.RemoveAt(chosen.Count - 1);
                     foreach (var c in candidate) used.Remove(c.Id);
                 }
 
-                return false;
+                return;
             }
 
-            foreach (var candidate in trios)
+            for (var i = trioFrom; i < trios.Count; i++)
             {
+                var candidate = trios[i];
+
                 if (candidate.Any(c => used.Contains(c.Id)))
                     continue;
 
                 foreach (var c in candidate) used.Add(c.Id);
                 chosen.Add((MeldKind.Trio, candidate));
 
-                if (Search(triosDone + 1, escalerasDone, used))
-                    return true;
+                Search(triosDone + 1, escalerasDone, escaleraFrom, i + 1);
 
                 chosen.RemoveAt(chosen.Count - 1);
                 foreach (var c in candidate) used.Remove(c.Id);
             }
-
-            return false;
         }
-    }
-
-    public static int Usefulness(IReadOnlyList<Card> hand, Card card, GameOptions options)
-    {
-        if (card.IsJoker)
-            return 3;
-
-        var inMeld = FindTrios(hand, options).Concat(FindEscaleras(hand, options))
-                                             .Any(m => m.Any(c => c.Id == card.Id));
-
-        return inMeld ? 2 : Potential(hand, card);
-    }
-
-    public static int Potential(IReadOnlyList<Card> hand, Card card)
-    {
-        if (card.IsJoker)
-            return 3;
-
-        for (var i = 0; i < hand.Count; i++)
-        {
-            var other = hand[i];
-
-            if (other.IsJoker || other.Id == card.Id)
-                continue;
-
-            if (other.Rank == card.Rank)
-                return 1;
-
-            if (other.Suit == card.Suit && Math.Abs((int)other.Rank - (int)card.Rank) <= 2)
-                return 1;
-        }
-
-        return 0;
     }
 
     private static List<List<Card>> Dedupe(List<List<Card>> melds)

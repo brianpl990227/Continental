@@ -152,6 +152,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
         State.DiscardOwnerId = null;
         State.StockRecycles = 0;
         State.LastCloserId = null;
+        State.History.Clear();
 
         var shoe = Deck.Build(State.Options);
         Deck.Shuffle(shoe, _random);
@@ -234,6 +235,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
             State.Discard.RemoveAt(State.Discard.Count - 1);
             player.Hand.Add(top);
             State.DiscardOwnerId = null;
+            State.History.Add(new PublicMove(player.Id, top, MoveKind.TookDiscard));
             State.Phase = GamePhase.Action;
             State.Say($"{player.Name} tomó {top.Label} del pozo.");
             Notify();
@@ -306,6 +308,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
             player.Hand.Add(TakeFromStock());
 
         State.DiscardOwnerId = null;
+        State.History.Add(new PublicMove(player.Id, offer.Card, MoveKind.Stole));
         State.Say($"{player.Name} robó de contra {offer.Card.Label} (+{State.Options.StealPenaltyCards} de castigo).");
 
         var blocked = State.Find(offer.BlockedPlayerId);
@@ -464,6 +467,9 @@ public sealed class GameEngine(GameState state, Random? random = null)
         if (!player.HasLaidDown)
             return ActionResult.Fail("Primero tienes que bajarte.");
 
+        if (player.Hand.Count <= 1)
+            return ActionResult.Fail("Guarda una carta para descartar y cerrar la ronda.");
+
         var source = State.Table.FirstOrDefault(m => m.Id == meldId);
 
         if (source is null)
@@ -562,6 +568,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
         player.Hand.RemoveAt(index);
         State.Discard.Add(card);
         State.DiscardOwnerId = playerId;
+        State.History.Add(new PublicMove(player.Id, card, MoveKind.Discarded));
 
         State.Say($"{player.Name} descartó {card.Label}.");
 

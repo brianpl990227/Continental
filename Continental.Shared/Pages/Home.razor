@@ -36,6 +36,13 @@
     }
     else
     {
+        @if (App.Client?.View is { } open)
+        {
+            <button class="btn btn--primary" style="width:100%;margin-bottom:10px" @onclick="Resume">
+                Volver a la mesa: @open.RoomName
+            </button>
+        }
+
         @if (Host is not NoGameHost)
         {
             <button class="btn btn--primary" style="width:100%" disabled="@(!HasName)" @onclick="CreateRoom">
@@ -64,7 +71,7 @@
             <div class="card-list">
                 @foreach (var room in Discovery.Rooms)
                 {
-                    <button class="room" disabled="@(!HasName)" @onclick="@(() => Join(room.Address, room.Port))">
+                    <button class="room" disabled="@(!HasName)" @onclick="@(() => Open(room))">
                         <div class="room__info">
                             <div class="room__name">@room.RoomName</div>
                             <div class="room__meta">
@@ -201,6 +208,27 @@
         var port = parts.Length > 1 && int.TryParse(parts[1], out var p) ? p : 8080;
 
         await Join(address, port);
+    }
+
+    private bool IsOwnRoom(RoomAnnounce room)
+        => Host.Room is { } own && own.State.RoomId == room.RoomId;
+
+    private Task Open(RoomAnnounce room)
+        => IsOwnRoom(room) ? Resume() : Join(room.Address, room.Port);
+
+    private Task Resume()
+    {
+        if (Host.Room is { } own && own.State.Players.FirstOrDefault(p => p.IsHost) is { } host)
+        {
+            if (App.Client is null)
+                App.SetClient(new LocalGameClient(own, host.Id));
+
+            if (!host.IsConnected)
+                own.MarkReconnected(host.Id);
+        }
+
+        Nav.NavigateTo("/room");
+        return Task.CompletedTask;
     }
 
     private async Task Join(string address, int port)

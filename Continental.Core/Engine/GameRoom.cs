@@ -8,7 +8,6 @@ public sealed class GameRoom : IDisposable
 {
     private readonly GameEngine _engine;
     private readonly Random _random = new();
-    private readonly Dictionary<string, BotLevel> _botLevels = [];
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
 
@@ -83,15 +82,10 @@ public sealed class GameRoom : IDisposable
                 if (!isHost)
                     return ActionResult.Fail("Solo el anfitrión añade bots.");
 
-                var level = (BotLevel)(m.BotLevel ?? (int)BotLevel.Normal);
                 var id = $"bot-{++_botCounter}";
-                var name = m.Name is { Length: > 0 } ? m.Name : BotName(level);
-                var result = _engine.AddPlayer(id, name, isBot: true);
+                var name = m.Name is { Length: > 0 } ? m.Name : BotName();
 
-                if (result.Ok)
-                    _botLevels[id] = level;
-
-                return result;
+                return _engine.AddPlayer(id, name, isBot: true);
             }
 
             case MessageType.Kick:
@@ -198,14 +192,17 @@ public sealed class GameRoom : IDisposable
         if (State.Steal is not { } offer)
             return;
 
-        foreach (var bot in State.Players.Where(p => p.IsBot && p.Id != offer.BlockedPlayerId))
+        var opened = offer.Deadline.AddSeconds(-State.Options.StealWindowSeconds);
+
+        if (DateTimeOffset.UtcNow < opened.AddMilliseconds(900))
+            return;
+
+        foreach (var bot in State.Players.Where(p => p.IsBot && p.IsConnected && p.Id != offer.BlockedPlayerId))
         {
             if (bot.Id == offer.DiscarderId)
                 continue;
 
-            var level = _botLevels.GetValueOrDefault(bot.Id, BotLevel.Normal);
-
-            if (BotBrain.WantsSteal(State, bot, level, _random))
+            if (BotBrain.WantsSteal(State, bot))
             {
                 _engine.ClaimSteal(bot.Id);
                 return;
@@ -221,12 +218,10 @@ public sealed class GameRoom : IDisposable
         if (DateTimeOffset.UtcNow < _botReadyAt)
             return;
 
-        var level = _botLevels.GetValueOrDefault(bot.Id, BotLevel.Normal);
-
         switch (State.Phase)
         {
             case GamePhase.Draw:
-                _engine.Draw(bot.Id, BotBrain.ChooseDraw(State, bot, level, _random));
+                _engine.Draw(bot.Id, BotBrain.ChooseDraw(State, bot));
                 Pause(600, 1100);
                 break;
 
@@ -235,7 +230,14 @@ public sealed class GameRoom : IDisposable
                 if (BotBrain.TryLayDown(State, bot) is { } specs)
                 {
                     _engine.LayDown(bot.Id, specs);
-                    Pause(700, 1200);
+                    Pause(900, 1500);
+                    return;
+                }
+
+                if (BotBrain.FindJokerSwap(State, bot) is { } swap
+                    && _engine.SwapJoker(bot.Id, swap.MeldId, swap.CardId, swap.TargetMeldId, swap.Position).Ok)
+                {
+                    Pause(600, 1000);
                     return;
                 }
 
@@ -243,12 +245,12 @@ public sealed class GameRoom : IDisposable
                 {
                     if (_engine.Extend(bot.Id, meldId, cardId).Ok)
                     {
-                        Pause(500, 900);
+                        Pause(450, 800);
                         return;
                     }
                 }
 
-                var discard = BotBrain.ChooseDiscard(State, bot, level, _random);
+                var discard = BotBrain.ChooseDiscard(State, bot);
 
                 if (discard >= 0)
                     _engine.Discard(bot.Id, discard);
@@ -262,16 +264,14 @@ public sealed class GameRoom : IDisposable
     private void Pause(int minMs, int maxMs)
         => _botReadyAt = DateTimeOffset.UtcNow.AddMilliseconds(_random.Next(minMs, maxMs));
 
-    private static string BotName(BotLevel level)
+    private string BotName()
     {
-        string[] names = level switch
-        {
-            BotLevel.Easy => ["Nino", "Pepa", "Tito", "Lola"],
-            BotLevel.Hard => ["Sombra", "Comodín", "Tiburón", "Águila"],
-            _ => ["Chelo", "Marta", "Rubén", "Vicky"]
-        };
+        string[] names = ["Chelo", "Marta", "Rubén", "Vicky", "Sombra", "Tiburón", "Águila", "Lola", "Pepa", "Nino"];
+        var taken = State.Players.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var free = names.Where(n => !taken.Contains(n)).ToArray();
+        var pool = free.Length > 0 ? free : names;
 
-        return names[Random.Shared.Next(names.Length)];
+        return pool[_random.Next(pool.Length)];
     }
 
     public void Dispose()

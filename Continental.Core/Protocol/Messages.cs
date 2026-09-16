@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Continental.Core.Bots;
 using Continental.Core.Rules;
 
 namespace Continental.Core.Protocol;
@@ -50,8 +49,6 @@ public sealed class ClientMessage
     public int? Position { get; set; }
 
     public string? TargetMeldId { get; set; }
-
-    public int? BotLevel { get; set; }
 
     public List<MeldSpecDto>? Melds { get; set; }
 

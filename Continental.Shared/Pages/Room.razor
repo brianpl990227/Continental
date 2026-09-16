@@ -99,13 +99,11 @@ else if (View.Phase == GamePhase.Lobby)
 
         @if (View.YouAreHost)
         {
-            <div class="section-title">Añadir un bot</div>
+            <div class="section-title">Bots</div>
 
-            <div style="display:flex;gap:8px">
-                <button class="btn btn--grow" @onclick="@(() => AddBot(BotLevel.Easy))">Fácil</button>
-                <button class="btn btn--grow" @onclick="@(() => AddBot(BotLevel.Normal))">Normal</button>
-                <button class="btn btn--grow" @onclick="@(() => AddBot(BotLevel.Hard))">Difícil</button>
-            </div>
+            <button class="btn" style="width:100%" disabled="@(View.Players.Count >= 6)" @onclick="AddBot">
+                Añadir un bot
+            </button>
 
             <div class="section-title">Reglas</div>
 
@@ -628,8 +626,8 @@ else
 
     private void ClearError() => Client?.ClearError();
 
-    private Task AddBot(BotLevel level)
-        => Send(new ClientMessage { Type = MessageType.AddBot, BotLevel = (int)level });
+    private Task AddBot()
+        => Send(new ClientMessage { Type = MessageType.AddBot });
 
     private Task SetPreset(RulePreset preset)
         => Send(new ClientMessage { Type = MessageType.SetOptions, Options = GameOptions.ForPreset(preset) });

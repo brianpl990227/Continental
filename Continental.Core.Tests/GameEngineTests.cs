@@ -250,6 +250,7 @@ public class JokerSwapTests
 
         state.Phase = GamePhase.Action;
         state.CurrentPlayerIndex = state.Players.FindIndex(p => p.Id == mover);
+        state.Players.First(p => p.Id == mover).Hand.Add(C(Suit.Clubs, Rank.Nine));
 
         state.Table.Add(new Meld
         {
@@ -408,7 +409,7 @@ public class BotTests
                 case GamePhase.Draw:
                 {
                     var bot = state.Current!;
-                    Assert.True(engine.Draw(bot.Id, BotBrain.ChooseDraw(state, bot, BotLevel.Normal, random)).Ok);
+                    Assert.True(engine.Draw(bot.Id, BotBrain.ChooseDraw(state, bot)).Ok);
                     break;
                 }
 
@@ -428,7 +429,7 @@ public class BotTests
                     if (placed)
                         break;
 
-                    var discard = BotBrain.ChooseDiscard(state, bot, BotLevel.Normal, random);
+                    var discard = BotBrain.ChooseDiscard(state, bot);
                     Assert.True(engine.Discard(bot.Id, discard).Ok);
                     break;
                 }

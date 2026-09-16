@@ -118,7 +118,7 @@ public class NetworkTests : IAsyncLifetime
         await using var guest = await ConnectAsync("Invitada");
         await Until(() => guest.View is not null);
 
-        await _room.HandleAsync("host", new ClientMessage { Type = MessageType.AddBot, BotLevel = (int)BotLevel.Normal });
+        await _room.HandleAsync("host", new ClientMessage { Type = MessageType.AddBot });
         await _room.HandleAsync("host", new ClientMessage { Type = MessageType.Start });
 
         Assert.True(await Until(() => guest.View?.Phase != GamePhase.Lobby), "la partida no arrancó");
@@ -205,6 +205,31 @@ public class NetworkTests : IAsyncLifetime
         Assert.Equal(hand, again.View!.Hand.Select(c => c.Id).OrderBy(x => x));
 
         Assert.Equal(3, again.View.Players.Count);
+    }
+
+    [Fact]
+    public async Task A_player_who_lost_their_id_gets_their_seat_back_by_name()
+    {
+        var first = await ConnectAsync("Ana");
+        await Until(() => first.View is not null);
+
+        var seat = first.PlayerId;
+
+        await _room.HandleAsync("host", new ClientMessage { Type = MessageType.AddBot });
+        await _room.HandleAsync("host", new ClientMessage { Type = MessageType.Start });
+        Assert.True(await Until(() => first.View?.Hand.Count == 7));
+
+        var hand = first.View!.Hand.Select(c => c.Id).OrderBy(x => x).ToList();
+
+        await first.DisposeAsync();
+        Assert.True(await Until(() => _room.State.Find(seat)?.IsConnected == false));
+
+        await using var again = await ConnectAsync("ana");
+        Assert.True(await Until(() => again.View is not null));
+
+        Assert.Equal(seat, again.PlayerId);
+        Assert.Equal(hand, again.View!.Hand.Select(c => c.Id).OrderBy(x => x));
+        Assert.True(_room.State.Find(seat)!.IsConnected);
     }
 
     [Fact]

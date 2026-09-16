@@ -139,6 +139,12 @@ public sealed class GameServer : IAsyncDisposable
 
             _room.MarkReconnected(playerId);
         }
+        else if (_room.State.Phase != GamePhase.Lobby && ReclaimableSeat(message.Name) is { } seatId)
+        {
+            DropStaleConnections(seatId, connection);
+            _room.MarkReconnected(seatId);
+            playerId = seatId;
+        }
         else
         {
             playerId = $"guest-{Interlocked.Increment(ref _guestCounter)}";
@@ -157,6 +163,18 @@ public sealed class GameServer : IAsyncDisposable
         await SendAsync(connection, seat, new ServerMessage { Type = MessageType.Welcome, YouId = playerId });
 
         RequestBroadcast();
+    }
+
+    private string? ReclaimableSeat(string? name)
+    {
+        var wanted = name?.Trim();
+
+        if (string.IsNullOrEmpty(wanted))
+            return null;
+
+        return _room.State.Players
+                    .FirstOrDefault(p => !p.IsBot && !p.IsConnected && string.Equals(p.Name, wanted, StringComparison.OrdinalIgnoreCase))
+                    ?.Id;
     }
 
     private void DropStaleConnections(string playerId, ISocketConnection keep)
