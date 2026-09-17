@@ -21,6 +21,7 @@ public static class MessageType
     public const string NextRound = "nextround";
     public const string PlayAgain = "playagain";
     public const string Leave = "leave";
+    public const string Chat = "chat";
 
     public const string Ping = "ping";
 
@@ -49,6 +50,8 @@ public sealed class ClientMessage
     public int? Position { get; set; }
 
     public string? TargetMeldId { get; set; }
+
+    public string? Text { get; set; }
 
     public List<MeldSpecDto>? Melds { get; set; }
 

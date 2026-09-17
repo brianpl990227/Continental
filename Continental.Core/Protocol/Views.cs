@@ -67,6 +67,10 @@ public sealed record PlayerView
 
     public IReadOnlyList<string> Log { get; init; } = [];
 
+    public IReadOnlyList<ChatLine> Chat { get; init; } = [];
+
+    public IReadOnlyList<string> Typing { get; init; } = [];
+
     public bool YourTurn { get; init; }
 
     public bool CanLayDown { get; init; }
@@ -120,6 +124,8 @@ public sealed record PlayerView
             StockCount = state.Stock.Count,
             Steal = steal,
             Log = state.Log.ToList(),
+            Chat = state.Chat.ToList(),
+            Typing = state.TypingIds.Select(id => state.Find(id)?.Name).OfType<string>().ToList(),
             YourTurn = current?.Id == playerId,
             CanLayDown = canLayDown,
             YouAreHost = me?.IsHost ?? false

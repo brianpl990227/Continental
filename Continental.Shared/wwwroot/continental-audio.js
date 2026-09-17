@@ -217,6 +217,16 @@ const sounds = {
 
     tap() {
         noise({ duration: 0.02, freq: 2800, q: 2.2, gain: 0.08 });
+    },
+
+    chat() {
+        tone({ freq: 1046.5, duration: 0.07, type: "sine", gain: 0.05 });
+        tone({ freq: 1318.5, duration: 0.09, type: "sine", gain: 0.05, delay: 0.07 });
+    },
+
+    swap() {
+        noise({ duration: 0.06, freq: rand(2200, 2800), q: 1.2, gain: 0.16, sweep: 0.6 });
+        chord([783.99, 1046.5], { stagger: 0.07, duration: 0.22, gain: 0.09 });
     }
 };
 

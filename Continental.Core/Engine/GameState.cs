@@ -51,6 +51,28 @@ public enum MoveKind
 
 public sealed record PublicMove(string PlayerId, Card Card, MoveKind Kind);
 
+public sealed record ChatLine(int Seq, string PlayerId, string Name, string Text, bool IsBot);
+
+public enum GameEventKind
+{
+    GameStarted = 0,
+    RoundStarted = 1,
+    TookDiscard = 2,
+    Stole = 3,
+    LaidDown = 4,
+    Extended = 5,
+    JokerSwapped = 6,
+    Discarded = 7,
+    RoundEnded = 8,
+    GameOver = 9,
+    StockRecycled = 10,
+    PlayerJoined = 11,
+    PlayerLeft = 12,
+    ChatSaid = 13
+}
+
+public sealed record GameEvent(GameEventKind Kind, string? PlayerId = null, string? TargetPlayerId = null, Card? Card = null, string? Text = null);
+
 public sealed class StealOffer
 {
     public required Card Card { get; init; }
@@ -98,6 +120,14 @@ public sealed class GameState
 
     public List<string> Log { get; init; } = [];
 
+    public List<ChatLine> Chat { get; init; } = [];
+
+    public List<string> TypingIds { get; init; } = [];
+
+    public DateTimeOffset TurnStartedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public int ChatSeq { get; set; }
+
     public RoundContract Contract => RoundContract.Standard[Math.Clamp(RoundIndex, 0, RoundContract.Standard.Count - 1)];
 
     public int TotalRounds => RoundContract.Standard.Count;
@@ -117,5 +147,16 @@ public sealed class GameState
 
         if (Log.Count > 60)
             Log.RemoveRange(0, Log.Count - 60);
+    }
+
+    public ChatLine Talk(PlayerState player, string text)
+    {
+        var line = new ChatLine(++ChatSeq, player.Id, player.Name, text, player.IsBot);
+        Chat.Add(line);
+
+        if (Chat.Count > 80)
+            Chat.RemoveRange(0, Chat.Count - 80);
+
+        return line;
     }
 }

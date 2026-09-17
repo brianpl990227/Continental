@@ -19,21 +19,52 @@ export function capture(selector) {
     return [r.left, r.top, r.width, r.height];
 }
 
-export function flyFrom(targetSelector, fromSelector, flip) {
+export function captureMany(selectors) {
+    const out = [];
+
+    for (const selector of selectors.split('|')) {
+        const el = selector ? document.querySelector(selector) : null;
+
+        if (!el) {
+            out.push(0, 0, 0, 0);
+            continue;
+        }
+
+        const r = el.getBoundingClientRect();
+        out.push(r.left, r.top, r.width, r.height);
+    }
+
+    return out;
+}
+
+export function flyFrom(targetSelector, fromSelector, flip, delay) {
     const el = document.querySelector(fromSelector);
 
     if (!el) return;
 
     const r = el.getBoundingClientRect();
 
-    fly(targetSelector, r.left, r.top, r.width, r.height, flip);
+    if (el.classList.contains('card')) {
+        fly(targetSelector, r.left, r.top, r.width, r.height, flip, delay);
+        return;
+    }
+
+    const target = document.querySelector(targetSelector);
+
+    if (!target) return;
+
+    const t = target.getBoundingClientRect();
+    const width = t.width || r.width;
+    const height = t.height || r.height;
+
+    fly(targetSelector, r.left + r.width / 2 - width / 2, r.top + r.height / 2 - height / 2, width, height, flip, delay);
 }
 
-export function flyFromRect(targetSelector, left, top, width, height, flip) {
-    fly(targetSelector, left, top, width, height, flip);
+export function flyFromRect(targetSelector, left, top, width, height, flip, delay) {
+    fly(targetSelector, left, top, width, height, flip, delay);
 }
 
-function fly(targetSelector, fromLeft, fromTop, fromWidth, fromHeight, flip) {
+function fly(targetSelector, fromLeft, fromTop, fromWidth, fromHeight, flip, delay) {
     try {
         if (inFlight.has(targetSelector)) return;
 
@@ -41,19 +72,55 @@ function fly(targetSelector, fromLeft, fromTop, fromWidth, fromHeight, flip) {
 
         if (!target || !(fromWidth > 0)) return;
 
-        const from = { left: fromLeft, top: fromTop, width: fromWidth, height: fromHeight };
+        if (reducedMotion()) return;
+
+        const previous = target.style.visibility;
+        target.style.visibility = 'hidden';
+        inFlight.add(targetSelector);
+
+        let settled = false;
+
+        const done = () => {
+            if (settled) return;
+            settled = true;
+
+            inFlight.delete(targetSelector);
+            target.style.visibility = previous;
+        };
+
+        const wait = Math.max(0, delay || 0);
+
+        setTimeout(() => launch(target, targetSelector, fromLeft, fromTop, fromWidth, fromHeight, flip, done), wait);
+        setTimeout(done, wait + (flip ? FLIP_DURATION : DURATION) + 900);
+    } catch {
+
+    }
+}
+
+function launch(target, targetSelector, fromLeft, fromTop, fromWidth, fromHeight, flip, done) {
+    try {
+        if (!target.isConnected) {
+            done();
+            return;
+        }
+
+        reveal(target);
 
         const to = target.getBoundingClientRect();
 
-        if (!to.width || !from.width) return;
+        if (!to.width) {
+            done();
+            return;
+        }
 
-        if (reducedMotion()) return;
-
-        const dx = from.left - to.left;
-        const dy = from.top - to.top;
+        const dx = fromLeft - to.left;
+        const dy = fromTop - to.top;
         const distance = Math.hypot(dx, dy);
 
-        if (distance < 8) return;
+        if (distance < 8) {
+            done();
+            return;
+        }
 
         const wrapper = document.createElement('div');
         wrapper.className = 'fly-ghost';
@@ -70,16 +137,13 @@ function fly(targetSelector, fromLeft, fromTop, fromWidth, fromHeight, flip) {
         ghost.style.height = '100%';
         ghost.style.margin = '0';
         ghost.style.transition = 'none';
+        ghost.style.animation = 'none';
         ghost.style.visibility = 'visible';
 
         wrapper.appendChild(ghost);
         document.body.appendChild(wrapper);
 
-        const previous = target.style.visibility;
-        target.style.visibility = 'hidden';
-        inFlight.add(targetSelector);
-
-        const scale = from.width / to.width;
+        const scale = fromWidth / to.width;
 
         const lift = Math.min(46, distance * 0.16);
         const midX = dx * 0.5;
@@ -102,7 +166,6 @@ function fly(targetSelector, fromLeft, fromTop, fromWidth, fromHeight, flip) {
         let flipAnim = null;
 
         if (flip) {
-
             flipAnim = ghost.animate(
                 [
                     { transform: 'rotateY(180deg)' },
@@ -114,22 +177,26 @@ function fly(targetSelector, fromLeft, fromTop, fromWidth, fromHeight, flip) {
             );
         }
 
-        let settled = false;
-
-        const done = () => {
-            if (settled) return;
-            settled = true;
-
-            inFlight.delete(targetSelector);
+        const finish = () => {
             wrapper.remove();
-            target.style.visibility = previous;
+            done();
         };
 
         Promise.all([travel.finished, flipAnim ? flipAnim.finished : Promise.resolve()])
-               .then(done, done);
-
-        setTimeout(done, duration + 900);
+               .then(finish, finish);
     } catch {
-
+        done();
     }
+}
+
+function reveal(target) {
+    const scroller = target.closest('.melds');
+
+    if (!scroller) return;
+
+    const box = scroller.getBoundingClientRect();
+    const r = target.getBoundingClientRect();
+
+    if (r.left < box.left || r.right > box.right)
+        target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }

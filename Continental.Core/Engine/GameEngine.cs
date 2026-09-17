@@ -27,7 +27,12 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
     public event Action? Changed;
 
+    public event Action<GameEvent>? Happened;
+
     private void Notify() => Changed?.Invoke();
+
+    private void Emit(GameEventKind kind, string? playerId = null, string? targetPlayerId = null, Card? card = null, string? text = null)
+        => Happened?.Invoke(new GameEvent(kind, playerId, targetPlayerId, card, text));
 
     public ActionResult AddPlayer(string id, string name, bool isBot, bool isHost = false)
     {
@@ -62,6 +67,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
         });
 
         State.Say($"{candidate} se unió a la sala.");
+        Emit(GameEventKind.PlayerJoined, id);
         Notify();
 
         return ActionResult.Success;
@@ -82,12 +88,13 @@ public sealed class GameEngine(GameState state, Random? random = null)
                 State.Players[i].Seat = i;
 
             State.Say($"{player.Name} salió de la sala.");
+            Emit(GameEventKind.PlayerLeft, id);
         }
         else
         {
-
             player.IsConnected = false;
             State.Say($"{player.Name} se desconectó.");
+            Emit(GameEventKind.PlayerLeft, id);
 
             if (State.Current?.Id == id)
                 AdvanceTurn();
@@ -139,6 +146,8 @@ public sealed class GameEngine(GameState state, Random? random = null)
             player.RoundScores.Clear();
         }
 
+        State.Chat.Clear();
+        Emit(GameEventKind.GameStarted);
         StartRound();
         return ActionResult.Success;
     }
@@ -176,8 +185,10 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         State.CurrentPlayerIndex = (State.DealerIndex + 1) % State.Players.Count;
         State.Phase = GamePhase.Draw;
+        State.TurnStartedAt = DateTimeOffset.UtcNow;
 
         State.Say($"Ronda {State.RoundIndex + 1} de {State.TotalRounds}: {State.Contract.Describe()} · {count} cartas.");
+        Emit(GameEventKind.RoundStarted);
         Notify();
     }
 
@@ -196,7 +207,6 @@ public sealed class GameEngine(GameState state, Random? random = null)
     {
         if (State.Discard.Count <= 1)
         {
-
             var extra = Deck.Build(State.Options);
             Deck.Shuffle(extra, _random);
             State.Stock.AddRange(extra);
@@ -215,6 +225,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
         State.StockRecycles++;
 
         State.Say("Se barajó el pozo para rehacer el mazo.");
+        Emit(GameEventKind.StockRecycled);
     }
 
     public ActionResult Draw(string playerId, DrawSource source)
@@ -238,6 +249,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
             State.History.Add(new PublicMove(player.Id, top, MoveKind.TookDiscard));
             State.Phase = GamePhase.Action;
             State.Say($"{player.Name} tomó {top.Label} del pozo.");
+            Emit(GameEventKind.TookDiscard, player.Id, card: top);
             Notify();
 
             return ActionResult.Success;
@@ -310,6 +322,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
         State.DiscardOwnerId = null;
         State.History.Add(new PublicMove(player.Id, offer.Card, MoveKind.Stole));
         State.Say($"{player.Name} robó de contra {offer.Card.Label} (+{State.Options.StealPenaltyCards} de castigo).");
+        Emit(GameEventKind.Stole, player.Id, offer.BlockedPlayerId, offer.Card);
 
         var blocked = State.Find(offer.BlockedPlayerId);
         State.Steal = null;
@@ -392,6 +405,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
         player.LaidDownThisTurn = true;
 
         State.Say($"{player.Name} se bajó con {contract.Describe()}.");
+        Emit(GameEventKind.LaidDown, player.Id);
         Notify();
 
         return ActionResult.Success;
@@ -447,13 +461,12 @@ public sealed class GameEngine(GameState state, Random? random = null)
             meld.EscaleraSuit ??= card.Suit;
 
         State.Say($"{player.Name} colocó {card.Label}.");
+        Emit(GameEventKind.Extended, player.Id, meld.OwnerId, card);
         Notify();
 
         return ActionResult.Success;
     }
 
-    // Canje del comodín: entregas la carta natural que estaba tapando, te llevas el
-    // comodín y lo colocas en el acto. No se puede guardar en la mano.
     public ActionResult SwapJoker(string playerId, string meldId, int cardId, string? targetMeldId, int? position)
     {
         if (State.Options.JokerSwapMode == JokerSwap.Off)
@@ -511,7 +524,6 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         var joker = source.Cards[jokerIndex];
 
-        // El comodín liberado tiene que caber en el sitio elegido antes de mover nada.
         var target = targetMeldId is null
             ? source
             : State.Table.FirstOrDefault(m => m.Id == targetMeldId);
@@ -548,6 +560,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
             ? $"{player.Name} canjeó el comodín por {replacement.Label}."
             : $"{player.Name} canjeó el comodín por {replacement.Label} y lo movió de sitio.");
 
+        Emit(GameEventKind.JokerSwapped, player.Id, source.OwnerId, replacement);
         Notify();
 
         return ActionResult.Success;
@@ -574,6 +587,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
         State.History.Add(new PublicMove(player.Id, card, MoveKind.Discarded));
 
         State.Say($"{player.Name} descartó {card.Label}.");
+        Emit(GameEventKind.Discarded, player.Id, card: card);
 
         if (player.Hand.Count == 0 && player.HasLaidDown)
         {
@@ -609,6 +623,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         State.Current!.LaidDownThisTurn = false;
         State.Phase = GamePhase.Draw;
+        State.TurnStartedAt = DateTimeOffset.UtcNow;
         Notify();
     }
 
@@ -635,6 +650,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
                 : $"{closer.Name} cerró la ronda.");
 
         State.Phase = GamePhase.RoundEnd;
+        Emit(GameEventKind.RoundEnded, closer?.Id);
         Notify();
     }
 
@@ -651,6 +667,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
             var winner = State.Players.MinBy(p => p.TotalScore);
             State.Say($"Fin de la partida. Gana {winner?.Name} con {winner?.TotalScore} puntos.");
+            Emit(GameEventKind.GameOver, winner?.Id);
             Notify();
 
             return ActionResult.Success;
@@ -682,6 +699,28 @@ public sealed class GameEngine(GameState state, Random? random = null)
         }
 
         State.Say("Nueva partida lista.");
+        Notify();
+
+        return ActionResult.Success;
+    }
+
+    public ActionResult Chat(string playerId, string text)
+    {
+        var player = State.Find(playerId);
+
+        if (player is null)
+            return ActionResult.Fail("Jugador desconocido.");
+
+        var clean = text.Trim();
+
+        if (clean.Length == 0)
+            return ActionResult.Success;
+
+        if (clean.Length > 160)
+            clean = clean[..160];
+
+        State.Talk(player, clean);
+        Emit(GameEventKind.ChatSaid, player.Id, text: clean);
         Notify();
 
         return ActionResult.Success;

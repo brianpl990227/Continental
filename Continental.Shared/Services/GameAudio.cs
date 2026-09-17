@@ -21,6 +21,8 @@ public static class Sfx
     public const string Flop = "flop";
     public const string Error = "error";
     public const string Tap = "tap";
+    public const string Chat = "chat";
+    public const string Swap = "swap";
 }
 
 public sealed class GameAudio(IJSRuntime js) : IAsyncDisposable

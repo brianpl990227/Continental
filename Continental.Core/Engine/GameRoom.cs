@@ -7,6 +7,7 @@ namespace Continental.Core.Engine;
 public sealed class GameRoom : IDisposable
 {
     private readonly GameEngine _engine;
+    private readonly BotBanter _banter;
     private readonly Random _random = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
@@ -18,7 +19,9 @@ public sealed class GameRoom : IDisposable
     {
         State = new GameState { RoomId = roomId, RoomName = roomName, Options = options };
         _engine = new GameEngine(State, _random);
+        _banter = new BotBanter(_random);
         _engine.Changed += () => StateChanged?.Invoke();
+        _engine.Happened += e => _banter.React(State, e, DateTimeOffset.UtcNow);
     }
 
     public GameState State { get; }
@@ -141,6 +144,9 @@ public sealed class GameRoom : IDisposable
             case MessageType.Leave:
                 return _engine.RemovePlayer(playerId);
 
+            case MessageType.Chat:
+                return _engine.Chat(playerId, m.Text ?? "");
+
             default:
                 return ActionResult.Fail($"Comando desconocido: {m.Type}");
         }
@@ -150,7 +156,6 @@ public sealed class GameRoom : IDisposable
 
     public void MarkReconnected(string playerId) => _engine.Reconnect(playerId);
 
-    
     public async Task RunAsync()
     {
         var token = _cts.Token;
@@ -164,6 +169,8 @@ public sealed class GameRoom : IDisposable
 
                 try
                 {
+                    PumpChat();
+
                     if (_engine.Tick())
                         continue;
 
@@ -185,6 +192,25 @@ public sealed class GameRoom : IDisposable
         {
 
         }
+    }
+
+    private void PumpChat()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        _banter.Tick(State, now);
+
+        foreach (var line in _banter.Due(now))
+            _engine.Chat(line.BotId, line.Text);
+
+        var typing = _banter.Typing(now).ToList();
+
+        if (typing.SequenceEqual(State.TypingIds))
+            return;
+
+        State.TypingIds.Clear();
+        State.TypingIds.AddRange(typing);
+        StateChanged?.Invoke();
     }
 
     private void TryBotSteal()

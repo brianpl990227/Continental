@@ -113,6 +113,40 @@ public class NetworkTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Chat_messages_reach_every_seat_at_the_table()
+    {
+        await using var guest = await ConnectAsync("Invitada");
+        await using var other = await ConnectAsync("Otro");
+        await Until(() => guest.View is not null && other.View is not null);
+
+        await guest.SendAsync(new ClientMessage { Type = MessageType.Chat, Text = "  ¡hola mesa!  " });
+
+        Assert.True(await Until(() => other.View?.Chat.Any(l => l.Text == "¡hola mesa!") == true),
+                    "el otro invitado no recibió el mensaje");
+
+        var line = other.View!.Chat.Single(l => l.Text == "¡hola mesa!");
+
+        Assert.Equal("Invitada", line.Name);
+        Assert.Equal(guest.PlayerId, line.PlayerId);
+        Assert.False(line.IsBot);
+        Assert.Contains(_room.State.Chat, l => l.Text == "¡hola mesa!");
+    }
+
+    [Fact]
+    public async Task A_bot_answers_a_greeting_in_the_chat_while_the_game_runs()
+    {
+        await using var guest = await ConnectAsync("Invitada");
+        await Until(() => guest.View is not null);
+
+        await _room.HandleAsync("host", new ClientMessage { Type = MessageType.AddBot, Name = "Marta" });
+        await _room.HandleAsync("host", new ClientMessage { Type = MessageType.Start });
+
+        Assert.True(await Until(() => guest.View?.Phase != GamePhase.Lobby), "la partida no arrancó");
+        Assert.True(await Until(() => guest.View?.Chat.Any(l => l.IsBot) == true, 8000),
+                    "ningún bot saludó al empezar");
+    }
+
+    [Fact]
     public async Task A_guest_never_sees_another_players_cards()
     {
         await using var guest = await ConnectAsync("Invitada");

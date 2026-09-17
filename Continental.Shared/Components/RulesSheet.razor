@@ -6,116 +6,23 @@
 
     <div class="sheet__body">
         <span class="rules__badge">
-            <span aria-hidden="true">@(Options.Preset == RulePreset.Spain ? "🇪🇸" : Options.Preset == RulePreset.LatinAmerica ? "🌎" : "⚙️")</span>
+            <span aria-hidden="true">@Flag</span>
             Variante @Options.DisplayName
         </span>
 
-        <p class="join-info__hint" style="margin:0 0 18px">
-            El anfitrión elige la variante antes de empezar. Estas son las reglas con las que
-            se juega esta partida.
+        <p class="join-info__hint" style="margin:0 0 6px">
+            El anfitrión elige la variante antes de empezar. Donde España y Latinoamérica no coinciden,
+            verás las dos y cuál está en uso. Todo lo demás es igual en ambas.
         </p>
 
-        <div class="section-title">Cómo se juega</div>
+        <div class="section-title">Lo básico</div>
 
-        <ol class="how">
-            <li>Roba una carta del <strong>mazo</strong> o del <strong>pozo</strong>.</li>
-            <li>Si quieres, <strong>bájate</strong> poniendo en la mesa lo que pide la ronda.</li>
-            <li>Ya bajado, puedes <strong>colocar</strong> cartas sueltas en los juegos de la mesa.</li>
-            <li><strong>Descarta</strong> una carta para pasar el turno.</li>
-            <li>Te quedas sin cartas al descartar: <strong>cierras</strong> la ronda.</li>
-        </ol>
-
-        <p class="join-info__hint" style="margin:12px 0 0">
-            Al bajarte pones los juegos <strong>completos, con todas las cartas que elijas</strong>: un trío
-            de cuatro o una escalera de siete bajan enteros mientras cada juego sea válido en esta variante.
-            Lo único obligatorio es <strong>quedarte con una carta para tirar</strong>.
-        </p>
-
-        <p class="join-info__hint" style="margin:12px 0 0">
-            Gana quien tenga <strong>menos puntos</strong> tras las siete rondas. Las cartas que
-            te queden en la mano suman en tu contra.
-        </p>
-
-        <div class="section-title">Qué es un trío</div>
-
-        <p class="join-info__hint" style="margin:0 0 12px">
-            Tres o más cartas del <strong>mismo número</strong>. Aquí es donde las dos variantes
-            no se parecen, y es el motivo más habitual de que el botón de bajarse no se active.
-        </p>
-
-        <div class="compare">
-            <div class="compare__side @(Options.Preset == RulePreset.Spain ? "compare__side--active" : "")">
-                <div class="compare__head">🇪🇸 España @(Options.Preset == RulePreset.Spain ? "· en uso" : "")</div>
-                <p><strong>Todas de palo distinto.</strong> Tres reyes valen solo si son de tres palos diferentes.</p>
-                <p class="compare__bad">K♠ K♠ K♥ no vale: dos picas.</p>
-                <p class="compare__good">K♠ K♥ K♦ sí vale.</p>
-                <p>Como máximo cuatro cartas en total: una por palo, y el comodín ocupa el sitio de un palo.</p>
-            </div>
-
-            <div class="compare__side @(Options.Preset == RulePreset.LatinAmerica ? "compare__side--active" : "")">
-                <div class="compare__head">🌎 Latinoamérica @(Options.Preset == RulePreset.LatinAmerica ? "· en uso" : "")</div>
-                <p><strong>El palo da igual.</strong> Basta con que coincida el número.</p>
-                <p class="compare__good">K♠ K♠ K♥ sí vale.</p>
-                <p>Se juega con dos barajas, así que la misma carta puede repetirse en el trío.</p>
-                <p>Sin límite de cartas: puedes bajar un trío de cuatro o de cinco.</p>
-            </div>
-        </div>
-
-        <div class="section-title">Qué es una escalera</div>
-
-        <p class="join-info__hint" style="margin:0 0 12px">
-            @Options.MinEscaleraSize o más cartas <strong>consecutivas del mismo palo</strong>. Eso es igual en
-            las dos variantes; lo que cambia es el as.
-        </p>
-
-        <div class="compare">
-            <div class="compare__side @(Options.Preset == RulePreset.Spain ? "compare__side--active" : "")">
-                <div class="compare__head">🇪🇸 España @(Options.Preset == RulePreset.Spain ? "· en uso" : "")</div>
-                <p><strong>El as sirve de alto, de bajo y de bisagra.</strong></p>
-                <p class="compare__good">A♠ 2♠ 3♠ 4♠ · J♠ Q♠ K♠ A♠ · Q♠ K♠ A♠ 2♠</p>
-            </div>
-
-            <div class="compare__side @(Options.Preset == RulePreset.LatinAmerica ? "compare__side--active" : "")">
-                <div class="compare__head">🌎 Latinoamérica @(Options.Preset == RulePreset.LatinAmerica ? "· en uso" : "")</div>
-                <p><strong>El as solo es alto.</strong></p>
-                <p class="compare__good">J♠ Q♠ K♠ A♠</p>
-                <p class="compare__bad">A♠ 2♠ 3♠ 4♠ no vale.</p>
-            </div>
-        </div>
-
-        <p class="join-info__hint" style="margin:12px 0 0">
-            En ambas: los comodines tapan huecos, pero <strong>nunca dos seguidos</strong>, y no puede
-            repetirse el mismo número dentro de una escalera.
-        </p>
-
-        <div class="section-title">El comodín después de bajarse</div>
-
-        <p class="join-info__hint" style="margin:0 0 12px">
-            El comodín es <strong>la única carta que se puede mover</strong> una vez está en la mesa. El
-            resto se queda fija. Para llevártelo tienes que entregar la carta exacta que estaba tapando, y
-            <strong>colocarlo en el acto</strong>: no puedes guardártelo en la mano.
-        </p>
-
-        <div class="compare">
-            <div class="compare__side @(Options.JokerSwapMode == JokerSwap.OwnerOnly ? "compare__side--active" : "")">
-                <div class="compare__head">🇪🇸 España @(Options.JokerSwapMode == JokerSwap.OwnerOnly ? "· en uso" : "")</div>
-                <p><strong>Solo el dueño canjea su comodín.</strong></p>
-                <p class="compare__good">Si la escalera la bajaste tú, das la carta y te llevas el comodín.</p>
-                <p class="compare__bad">La escalera de otro no se toca.</p>
-            </div>
-
-            <div class="compare__side @(Options.JokerSwapMode == JokerSwap.AnyLaidDownPlayer ? "compare__side--active" : "")">
-                <div class="compare__head">🌎 Latinoamérica @(Options.JokerSwapMode == JokerSwap.AnyLaidDownPlayer ? "· en uso" : "")</div>
-                <p><strong>Cualquiera que se haya bajado puede canjearlo.</strong></p>
-                <p class="compare__good">Da igual de quién sea la escalera: si tienes la carta, el comodín es tuyo.</p>
-            </div>
-        </div>
-
-        <p class="join-info__hint" style="margin:12px 0 0">
-            Dos límites que valen en las dos: no puedes dejar <strong>dos comodines juntos</strong>, ni dejar
-            una escalera con menos de @Options.MinEscaleraSize cartas. Y cuando el comodín cabe por los dos
-            extremos, <strong>eliges tú el lado</strong>.
-        </p>
+        <ul class="rules__list">
+            <li><strong>@Options.DeckCount barajas francesas</strong> con @(Options.DeckCount * Options.JokersPerDeck) comodines, para 2 a 6 jugadores.</li>
+            <li>Se juegan <strong>siete rondas</strong>. En cada una hay que bajar una combinación concreta de tríos y escaleras.</li>
+            <li>Al terminar cada ronda, las cartas que te queden en la mano <strong>suman puntos en tu contra</strong>.</li>
+            <li>Gana quien tenga <strong>menos puntos</strong> al acabar la séptima ronda.</li>
+        </ul>
 
         <div class="section-title">Las siete rondas</div>
 
@@ -133,17 +40,168 @@
             }
         </div>
 
-        <div class="section-title">Detalles de la variante</div>
+        <div class="compare" style="margin-top:12px">
+            <div class="compare__side @Active(RulePreset.Spain)">
+                <div class="compare__head">🇪🇸 España @InUse(RulePreset.Spain)</div>
+                <p><strong>Se empieza con 6 cartas</strong> y cada ronda se reparte una más, hasta 12.</p>
+            </div>
 
-        <div class="rules">
-            @foreach (var (label, value) in Options.Summary())
-            {
-                <div class="rules__row">
-                    <span class="rules__label">@label</span>
-                    <span class="rules__value">@value</span>
-                </div>
-            }
+            <div class="compare__side @Active(RulePreset.LatinAmerica)">
+                <div class="compare__head">🌎 Latinoamérica @InUse(RulePreset.LatinAmerica)</div>
+                <p><strong>Se empieza con 7 cartas</strong> y cada ronda se reparte una más, hasta 13.</p>
+            </div>
         </div>
+
+        <div class="section-title">Tu turno, paso a paso</div>
+
+        <ol class="how">
+            <li>Roba una carta del <strong>mazo</strong> (boca abajo) o la de arriba del <strong>pozo</strong>.</li>
+            <li>Si tienes lo que pide la ronda, <strong>bájate</strong>: selecciona las cartas y pulsa «Bajarme».</li>
+            <li>Ya bajado, <strong>coloca</strong> cartas sueltas en cualquier juego de la mesa, tuyo o ajeno.</li>
+            <li>Si tienes la carta que tapa un comodín de una escalera, <strong>canjéala</strong> y llévate el comodín.</li>
+            <li><strong>Tira</strong> una carta al pozo para acabar el turno. Es obligatorio.</li>
+            <li>Si tiras tu última carta estando bajado, <strong>cierras la ronda</strong>.</li>
+        </ol>
+
+        <p class="join-info__hint" style="margin:12px 0 0">
+            Bajarse, colocar y canjear solo se puede hacer <strong>en tu turno y después de robar</strong>.
+            Y siempre tienes que guardarte una carta para tirar: no se puede bajar ni colocar la mano entera.
+        </p>
+
+        <div class="section-title">Robar de contra</div>
+
+        <ul class="rules__list">
+            <li>Cuando a alguien le toca y decide robar del <strong>mazo</strong>, la carta de arriba del pozo queda libre durante <strong>@Options.StealWindowSeconds segundos</strong>.</li>
+            <li>En ese momento <strong>cualquiera puede robarla</strong>, aunque no sea su turno. No puede quien la tiró ni quien está robando.</li>
+            <li>El que la roba se la queda y además recibe <strong>@Options.StealPenaltyCards carta de castigo</strong> del mazo.</li>
+            <li>El turno sigue donde estaba: quien iba a robar del mazo, roba y juega con normalidad.</li>
+            <li>Si nadie la quiere, pasan los segundos y la carta se queda en el pozo.</li>
+        </ul>
+
+        <p class="rules__note">
+            <strong>Ojo:</strong> robar de contra también vale para los bots, y los bots lo usan.
+            Si tiras un rey que alguien busca, cuenta con que se lo lleven.
+        </p>
+
+        <div class="section-title">Bajarse</div>
+
+        <ul class="rules__list">
+            <li>Solo puedes bajarte <strong>una vez por ronda</strong>, y con <strong>exactamente</strong> lo que pide: @Options.MinTrioSize o más cartas por trío y @Options.MinEscaleraSize o más por escalera.</li>
+            <li>Los juegos se bajan <strong>completos</strong>. Un trío de cinco o una escalera de siete bajan enteros si son válidos.</li>
+            <li>No puedes bajar de más ni de menos: en la ronda de «2 tríos» bajas dos tríos, ni uno ni tres.</li>
+            <li>Hasta que no te bajas, no puedes colocar cartas en la mesa ni canjear comodines.</li>
+            <li>Si te bajas y <strong>cierras en la misma jugada</strong>, te apuntas <strong>@Options.CloseSameTurnBonus puntos</strong>.</li>
+        </ul>
+
+        <div class="section-title">Qué es un trío</div>
+
+        <p class="join-info__hint" style="margin:0 0 12px">
+            Tres o más cartas del <strong>mismo número</strong>. Aquí es donde las dos variantes
+            no se parecen, y es el motivo más habitual de que el botón de bajarse no se active.
+        </p>
+
+        <div class="compare">
+            <div class="compare__side @Active(RulePreset.Spain)">
+                <div class="compare__head">🇪🇸 España @InUse(RulePreset.Spain)</div>
+                <p><strong>Todas de palo distinto.</strong> Tres reyes valen solo si son de tres palos diferentes.</p>
+                <p class="compare__bad">K♠ K♠ K♥ no vale: dos picas.</p>
+                <p class="compare__good">K♠ K♥ K♦ sí vale.</p>
+                <p>Como máximo cuatro cartas: una por palo. El comodín ocupa el sitio de un palo que falte.</p>
+            </div>
+
+            <div class="compare__side @Active(RulePreset.LatinAmerica)">
+                <div class="compare__head">🌎 Latinoamérica @InUse(RulePreset.LatinAmerica)</div>
+                <p><strong>El palo da igual.</strong> Basta con que coincida el número.</p>
+                <p class="compare__good">K♠ K♠ K♥ sí vale.</p>
+                <p>Con dos barajas la misma carta puede repetirse dentro del trío.</p>
+                <p>Sin límite de cartas: un trío de cuatro, cinco o más es válido.</p>
+            </div>
+        </div>
+
+        <div class="section-title">Qué es una escalera</div>
+
+        <p class="join-info__hint" style="margin:0 0 12px">
+            @Options.MinEscaleraSize o más cartas <strong>consecutivas del mismo palo</strong>. Igual en
+            las dos variantes; lo que cambia es qué puede hacer el as.
+        </p>
+
+        <div class="compare">
+            <div class="compare__side @Active(RulePreset.Spain)">
+                <div class="compare__head">🇪🇸 España @InUse(RulePreset.Spain)</div>
+                <p><strong>El as sirve de alto, de bajo y de bisagra.</strong></p>
+                <p class="compare__good">A♠ 2♠ 3♠ 4♠ · J♠ Q♠ K♠ A♠ · Q♠ K♠ A♠ 2♠</p>
+                <p>Una escalera puede llegar a las 13 cartas, pero un número no puede repetirse dentro de ella.</p>
+            </div>
+
+            <div class="compare__side @Active(RulePreset.LatinAmerica)">
+                <div class="compare__head">🌎 Latinoamérica @InUse(RulePreset.LatinAmerica)</div>
+                <p><strong>El as solo es alto.</strong> Va después del rey y ahí se acaba.</p>
+                <p class="compare__good">J♠ Q♠ K♠ A♠</p>
+                <p class="compare__bad">A♠ 2♠ 3♠ 4♠ no vale.</p>
+            </div>
+        </div>
+
+        <div class="section-title">Los comodines</div>
+
+        <ul class="rules__list">
+            <li>Un comodín <strong>sustituye a cualquier carta</strong>, en tríos y en escaleras.</li>
+            <li>En una escalera <strong>nunca puede haber dos comodines seguidos</strong>, y hace falta al menos una carta natural.</li>
+            <li>Cuando bajas una escalera y el comodín cabe por los dos extremos, <strong>eliges tú</strong> qué carta hace.</li>
+            <li>Si te quedas un comodín en la mano al acabar la ronda, cuesta <strong>@Options.JokerValue puntos</strong>. Es la carta más cara.</li>
+        </ul>
+
+        <div class="compare" style="margin-top:12px">
+            <div class="compare__side @Active(RulePreset.Spain)">
+                <div class="compare__head">🇪🇸 España @InUse(RulePreset.Spain)</div>
+                <p>En un trío el comodín <strong>ocupa el hueco de un palo</strong>, así que un trío nunca pasa de cuatro cartas.</p>
+            </div>
+
+            <div class="compare__side @Active(RulePreset.LatinAmerica)">
+                <div class="compare__head">🌎 Latinoamérica @InUse(RulePreset.LatinAmerica)</div>
+                <p>En un trío <strong>no hay límite de comodines</strong>: vale con dos comodines y una carta natural.</p>
+            </div>
+        </div>
+
+        <div class="section-title">Colocar cartas ya bajado</div>
+
+        <ul class="rules__list">
+            <li>Una vez bajado, en cada turno puedes <strong>colocar tantas cartas sueltas como quieras</strong> en los juegos de la mesa.</li>
+            <li>Vale en <strong>tus juegos y en los de los demás</strong>: un 8♥ en la escalera de corazones de otro, un rey en el trío de reyes de quien sea.</li>
+            <li>En una escalera la carta entra <strong>por cualquiera de los dos extremos</strong>. En un trío se añade sin más.</li>
+            <li>Un comodín también se puede colocar, con las mismas limitaciones de siempre.</li>
+            <li>Las cartas colocadas <strong>se quedan fijas</strong>. Lo único que se mueve después es el comodín.</li>
+        </ul>
+
+        <div class="section-title">Canjear un comodín de la mesa</div>
+
+        <p class="join-info__hint" style="margin:0 0 12px">
+            Esta es la jugada que más partidas cambia. Un comodín bajado en una escalera está haciendo de una
+            carta concreta. Si tú tienes esa carta, <strong>se la das y el comodín es tuyo</strong>.
+        </p>
+
+        <ul class="rules__list">
+            <li>Vale con <strong>cualquier escalera de la mesa</strong>, la tuya o la de otro jugador. En los tríos el comodín se queda.</li>
+            <li>Tienes que estar <strong>bajado</strong> y ser tu turno, después de robar.</li>
+            <li>Entregas <strong>exactamente la carta que el comodín tapa</strong>: mismo número y mismo palo. Un 7♦ no sirve para el hueco del 7♥.</li>
+            <li>El comodín <strong>se coloca en el acto</strong>, en el mismo turno, en cualquier juego donde encaje: otra escalera, un trío, o un extremo de la misma escalera. No te lo puedes guardar en la mano.</li>
+            <li>No puede quedar junto a otro comodín, y ningún juego puede quedarse por debajo del mínimo.</li>
+            <li>Si el comodín liberado no cabe en ningún sitio, el canje no se puede hacer.</li>
+        </ul>
+
+        <p class="rules__note">
+            <strong>En la app:</strong> selecciona en tu mano la carta que tapa el comodín. La escalera que la acepta
+            se marca con <strong>★ canje</strong>. Tócala, elige «Canjear el comodín» y después toca el juego donde
+            quieres colocarlo; si cabe por los dos lados, te preguntamos cuál.
+        </p>
+
+        <div class="section-title">Cómo acaba una ronda</div>
+
+        <ul class="rules__list">
+            <li>La ronda termina cuando alguien, ya bajado, <strong>tira su última carta</strong>. Ese jugador suma 0.</li>
+            <li>Los demás suman el valor de <strong>todas las cartas que les quedan</strong>, se hayan bajado o no.</li>
+            <li>Si el mazo se agota, el pozo se baraja y vuelve a ser mazo. Si eso pasa <strong>más de @Options.MaxStockRecycles veces</strong>, la ronda queda en tablas y todos cuentan su mano.</li>
+            <li>Tras la séptima ronda gana quien tenga <strong>menos puntos en total</strong>.</li>
+        </ul>
 
         <div class="section-title">Cuánto vale cada carta</div>
 
@@ -165,10 +223,46 @@
                 <span class="rules__value">Su número</span>
             </div>
             <div class="rules__row">
+                <span class="rules__label">Cerrar la ronda</span>
+                <span class="rules__value">0 pts</span>
+            </div>
+            <div class="rules__row">
                 <span class="rules__label">Bajarse y cerrar a la vez</span>
                 <span class="rules__value scores__neg">@Options.CloseSameTurnBonus pts</span>
             </div>
         </div>
+
+        <div class="compare" style="margin-top:12px">
+            <div class="compare__side @Active(RulePreset.Spain)">
+                <div class="compare__head">🇪🇸 España @InUse(RulePreset.Spain)</div>
+                <p>El as vale <strong>20 puntos</strong>.</p>
+            </div>
+
+            <div class="compare__side @Active(RulePreset.LatinAmerica)">
+                <div class="compare__head">🌎 Latinoamérica @InUse(RulePreset.LatinAmerica)</div>
+                <p>El as vale <strong>30 puntos</strong>. Deshazte de ellos pronto.</p>
+            </div>
+        </div>
+
+        <div class="section-title">Resumen de la variante</div>
+
+        <div class="rules">
+            @foreach (var (label, value) in Options.Summary())
+            {
+                <div class="rules__row">
+                    <span class="rules__label">@label</span>
+                    <span class="rules__value">@value</span>
+                </div>
+            }
+        </div>
+
+        <div class="section-title">La mesa</div>
+
+        <ul class="rules__list">
+            <li>Los bots <strong>hablan</strong>. Se pican, celebran y protestan como cualquier amigo de sobremesa. No es personal.</li>
+            <li>Con el botón 💬 abres la charla completa y puedes contestarles, o hablar con los demás jugadores.</li>
+            <li>Si tardas mucho en tu turno, te lo van a recordar.</li>
+        </ul>
     </div>
 
     <div class="sheet__foot">
@@ -180,4 +274,15 @@
     [Parameter, EditorRequired] public GameOptions Options { get; set; } = default!;
 
     [Parameter] public EventCallback OnClose { get; set; }
+
+    private string Flag => Options.Preset switch
+    {
+        RulePreset.Spain => "🇪🇸",
+        RulePreset.LatinAmerica => "🌎",
+        _ => "⚙️"
+    };
+
+    private string Active(RulePreset preset) => Options.Preset == preset ? "compare__side--active" : "";
+
+    private string InUse(RulePreset preset) => Options.Preset == preset ? "· en uso" : "";
 }

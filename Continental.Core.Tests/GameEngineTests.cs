@@ -361,6 +361,107 @@ public class JokerSwapTests
         }
     }
 
+    [Theory]
+    [InlineData(RulePreset.Spain)]
+    [InlineData(RulePreset.LatinAmerica)]
+    public void Both_variants_let_anyone_laid_down_swap_a_joker_from_any_escalera(RulePreset preset)
+    {
+        Assert.Equal(JokerSwap.AnyLaidDownPlayer, GameOptions.ForPreset(preset).JokerSwapMode);
+
+        var engine = Table(out var state, GameOptions.ForPreset(preset).JokerSwapMode);
+
+        var beto = state.Players.First(p => p.Id == "p2");
+        var five = C(Suit.Hearts, Rank.Five);
+        beto.Hand.Add(five);
+
+        Assert.True(engine.SwapJoker("p2", "m1", five.Id, null, null).Ok);
+        Assert.Contains(state.Table[0].Cards, c => c.Id == five.Id);
+    }
+
+    [Fact]
+    public void The_freed_joker_can_be_moved_to_a_trio_somewhere_else_on_the_table()
+    {
+        var engine = Table(out var state, JokerSwap.AnyLaidDownPlayer);
+
+        state.Table.Add(new Meld
+        {
+            Id = "m2",
+            OwnerId = "p1",
+            Kind = MeldKind.Trio,
+            TrioRank = Rank.Nine,
+            Cards = [C(Suit.Clubs, Rank.Nine), C(Suit.Hearts, Rank.Nine), C(Suit.Spades, Rank.Nine)]
+        });
+
+        var beto = state.Players.First(p => p.Id == "p2");
+        var five = C(Suit.Hearts, Rank.Five);
+        beto.Hand.Add(five);
+
+        var result = engine.SwapJoker("p2", "m1", five.Id, "m2", 3);
+
+        Assert.True(result.Ok, result.Error);
+
+        var escalera = state.Table[0];
+        var trio = state.Table[1];
+
+        Assert.Equal(4, escalera.Size);
+        Assert.DoesNotContain(escalera.Cards, c => c.IsJoker);
+        Assert.Equal(five.Id, escalera.Cards[1].Id);
+        Assert.True(MeldValidator.IsRunInOrder(escalera.Cards, state.Options));
+
+        Assert.Equal(4, trio.Size);
+        Assert.True(trio.Cards[3].IsJoker);
+        Assert.DoesNotContain(beto.Hand, c => c.Id == five.Id);
+        Assert.Contains("movió", state.Log[^1]);
+    }
+
+    [Fact]
+    public void The_freed_joker_can_be_moved_to_another_escalera()
+    {
+        var engine = Table(out var state, JokerSwap.AnyLaidDownPlayer);
+
+        state.Table.Add(new Meld
+        {
+            Id = "m2",
+            OwnerId = "p2",
+            Kind = MeldKind.Escalera,
+            EscaleraSuit = Suit.Spades,
+            Cards = [C(Suit.Spades, Rank.Nine), C(Suit.Spades, Rank.Ten), C(Suit.Spades, Rank.Jack), C(Suit.Spades, Rank.Queen)]
+        });
+
+        var beto = state.Players.First(p => p.Id == "p2");
+        var five = C(Suit.Hearts, Rank.Five);
+        beto.Hand.Add(five);
+
+        Assert.True(engine.SwapJoker("p2", "m1", five.Id, "m2", 0).Ok);
+
+        Assert.True(state.Table[1].Cards[0].IsJoker);
+        Assert.Equal(5, state.Table[1].Size);
+        Assert.True(MeldValidator.IsRunInOrder(state.Table[1].Cards, state.Options));
+    }
+
+    [Fact]
+    public void A_joker_swap_is_refused_when_the_joker_would_not_fit_where_asked()
+    {
+        var engine = Table(out var state, JokerSwap.AnyLaidDownPlayer);
+
+        state.Table.Add(new Meld
+        {
+            Id = "m2",
+            OwnerId = "p1",
+            Kind = MeldKind.Trio,
+            TrioRank = Rank.Nine,
+            Cards = [C(Suit.Clubs, Rank.Nine), C(Suit.Hearts, Rank.Nine), C(Suit.Spades, Rank.Nine)]
+        });
+
+        var beto = state.Players.First(p => p.Id == "p2");
+        var five = C(Suit.Hearts, Rank.Five);
+        beto.Hand.Add(five);
+
+        Assert.False(engine.SwapJoker("p2", "m1", five.Id, "m2", 0).Ok);
+        Assert.True(state.Table[0].Cards[1].IsJoker);
+        Assert.Contains(beto.Hand, c => c.Id == five.Id);
+    }
+
     [Fact]
     public void A_joker_cannot_land_next_to_another_joker()
     {
@@ -374,6 +475,56 @@ public class JokerSwapTests
         beto.Hand.Add(five);
 
         Assert.False(engine.SwapJoker("p2", "m1", five.Id, null, 0).Ok);
+    }
+}
+
+public class ChatTests
+{
+    [Fact]
+    public void Chat_lines_are_numbered_trimmed_and_capped()
+    {
+        var state = new GameState { RoomId = "t", RoomName = "Test" };
+        var engine = new GameEngine(state, new Random(1));
+
+        engine.AddPlayer("p1", "Ana", false, isHost: true);
+
+        Assert.True(engine.Chat("p1", "  hola  ").Ok);
+        Assert.True(engine.Chat("p1", "   ").Ok);
+        Assert.False(engine.Chat("nadie", "hola").Ok);
+
+        var line = Assert.Single(state.Chat);
+        Assert.Equal("hola", line.Text);
+        Assert.Equal("Ana", line.Name);
+        Assert.False(line.IsBot);
+
+        for (var i = 0; i < 100; i++)
+            engine.Chat("p1", $"línea {i}");
+
+        Assert.Equal(80, state.Chat.Count);
+        Assert.True(state.Chat[^1].Seq > state.Chat[0].Seq);
+        Assert.Equal(state.Chat.Count, state.Chat.Select(l => l.Seq).Distinct().Count());
+
+        engine.Chat("p1", new string('x', 500));
+        Assert.Equal(160, state.Chat[^1].Text.Length);
+    }
+
+    [Fact]
+    public void The_view_carries_the_chat_and_who_is_typing()
+    {
+        var state = new GameState { RoomId = "t", RoomName = "Test" };
+        var engine = new GameEngine(state, new Random(1));
+
+        engine.AddPlayer("p1", "Ana", false, isHost: true);
+        engine.AddPlayer("b1", "Marta", true);
+        engine.Chat("b1", "hola");
+        state.TypingIds.Add("b1");
+
+        var view = Continental.Core.Protocol.PlayerView.For(state, "p1");
+
+        var line = Assert.Single(view.Chat);
+        Assert.Equal("Marta", line.Name);
+        Assert.True(line.IsBot);
+        Assert.Equal(["Marta"], view.Typing);
     }
 }
 

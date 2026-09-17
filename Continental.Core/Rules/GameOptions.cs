@@ -52,9 +52,7 @@ public sealed record GameOptions
 
     public bool CanExtendOpponentMelds { get; init; } = true;
 
-    public JokerSwap JokerSwapMode { get; init; } = JokerSwap.OwnerOnly;
-
-    public bool CanMoveJokerAfterLaydown { get; init; } = true;
+    public JokerSwap JokerSwapMode { get; init; } = JokerSwap.AnyLaidDownPlayer;
 
     public int TurnSeconds { get; init; }
 
@@ -69,7 +67,7 @@ public sealed record GameOptions
             AceValue = 20,
             AceHighAndLow = true,
             TrioRequiresDistinctSuits = true,
-            JokerSwapMode = JokerSwap.OwnerOnly
+            JokerSwapMode = JokerSwap.AnyLaidDownPlayer
         },
         _ => new GameOptions
         {
@@ -121,9 +119,9 @@ public sealed record GameOptions
             {
                 JokerSwap.Off => "No",
                 JokerSwap.OwnerOnly => "Solo el dueño de la escalera",
-                _ => "Cualquiera que se haya bajado"
+                _ => "Cualquiera que se haya bajado, de cualquier escalera"
             }),
-            ("Mover comodín ya bajado", CanMoveJokerAfterLaydown ? "Sí, dentro de tus escaleras" : "No")
+            ("El comodín canjeado", "Se coloca en el acto donde encaje")
         };
         return rows;
     }

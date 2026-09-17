@@ -2,13 +2,14 @@ using Microsoft.JSInterop;
 
 namespace Continental.Shared.Services;
 
-public sealed record Flight(string Target, string? FromSelector, double[]? FromRect, bool Flip);
+public sealed record Flight(string Target, string? FromSelector, double[]? FromRect, bool Flip, int DelayMs = 0);
 
 public sealed class CardFlight(IJSRuntime js) : IAsyncDisposable
 {
     public const string Stock = "#pile-stock";
     public const string Discard = "#pile-discard";
     public const string DiscardCard = "#pile-discard .card";
+    public const string Hand = ".hand__rail";
 
     private IJSObjectReference? _module;
     private bool _failed;
@@ -16,6 +17,8 @@ public sealed class CardFlight(IJSRuntime js) : IAsyncDisposable
     public static string CardAt(int cardId) => $"[data-card-id=\"{cardId}\"]";
 
     public static string Seat(string playerId) => $"[data-seat=\"{playerId}\"]";
+
+    public static string MeldAt(string meldId) => $"[data-meld-id=\"{meldId}\"]";
 
     public async Task InitAsync()
     {
@@ -50,6 +53,36 @@ public sealed class CardFlight(IJSRuntime js) : IAsyncDisposable
         }
     }
 
+    public async Task<Dictionary<int, double[]>> CaptureCardsAsync(IReadOnlyList<int> cardIds)
+    {
+        var rects = new Dictionary<int, double[]>();
+
+        if (_module is null || cardIds.Count == 0)
+            return rects;
+
+        try
+        {
+            var flat = await _module.InvokeAsync<double[]?>("captureMany", string.Join('|', cardIds.Select(CardAt)));
+
+            if (flat is null || flat.Length != cardIds.Count * 4)
+                return rects;
+
+            for (var i = 0; i < cardIds.Count; i++)
+            {
+                var rect = flat[(i * 4)..(i * 4 + 4)];
+
+                if (rect[2] > 0)
+                    rects[cardIds[i]] = rect;
+            }
+        }
+        catch (Exception)
+        {
+
+        }
+
+        return rects;
+    }
+
     public void Play(IEnumerable<Flight> flights)
     {
         if (_module is null)
@@ -65,11 +98,11 @@ public sealed class CardFlight(IJSRuntime js) : IAsyncDisposable
         {
             if (flight.FromSelector is { } selector)
             {
-                await _module!.InvokeVoidAsync("flyFrom", flight.Target, selector, flight.Flip);
+                await _module!.InvokeVoidAsync("flyFrom", flight.Target, selector, flight.Flip, flight.DelayMs);
             }
             else if (flight.FromRect is { Length: 4 } r)
             {
-                await _module!.InvokeVoidAsync("flyFromRect", flight.Target, r[0], r[1], r[2], r[3], flight.Flip);
+                await _module!.InvokeVoidAsync("flyFromRect", flight.Target, r[0], r[1], r[2], r[3], flight.Flip, flight.DelayMs);
             }
         }
         catch (Exception)

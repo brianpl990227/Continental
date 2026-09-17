@@ -167,6 +167,27 @@ else
         </div>
 
         <div class="piles">
+            <div class="chatter" aria-live="polite">
+                @foreach (var line in Bubbles)
+                {
+                    <div class="bubble seat--s@(Accent(SeatOf(line.PlayerId))) @(line.PlayerId == View.YouId ? "bubble--mine" : "")" @key="line.Seq">
+                        <span class="bubble__avatar">@Initial(line.Name)</span>
+                        <span class="bubble__body">
+                            <span class="bubble__name">@(line.PlayerId == View.YouId ? "Tú" : line.Name)</span>
+                            <span class="bubble__text">@line.Text</span>
+                        </span>
+                    </div>
+                }
+
+                @if (View.Typing.Count > 0)
+                {
+                    <div class="typing">
+                        <span>@(View.Typing.Count == 1 ? $"{View.Typing[0]} está escribiendo" : "Varios están escribiendo")</span>
+                        <span class="typing__dots"><i></i><i></i><i></i></span>
+                    </div>
+                }
+            </div>
+
             <div class="pile @(CanDraw ? "pile--actionable" : "")">
                 <div id="pile-stock"
                      class="pile__stack @(View.StockCount == 0 ? "pile__stack--empty" : "")"
@@ -206,7 +227,7 @@ else
             </div>
         </div>
 
-        <div class="melds">
+        <div class="melds @(Swapping is not null ? "melds--placing" : "")">
             @if (View.Table.Count == 0)
             {
                 <div class="melds__empty">Nadie se ha bajado todavía</div>
@@ -215,15 +236,22 @@ else
             {
                 @foreach (var meld in View.Table)
                 {
-                    var droppable = CanExtend;
                     var mine = meld.OwnerId == View.YouId;
+                    var (droppable, swappable, target) = MeldState(meld);
+                    var clickable = droppable || swappable || target;
 
-                    <div class="meld meld--s@(Accent(SeatOf(meld.OwnerId))) @(droppable ? "meld--droppable" : "") @(mine ? "meld--mine" : "")"
-                         role="@(droppable ? "button" : null)"
-                         tabindex="@(droppable ? 0 : null)"
-                         @onclick="@(() => Extend(meld.Id))">
+                    <div class="meld meld--s@(Accent(SeatOf(meld.OwnerId))) @(droppable ? "meld--droppable" : "") @(swappable ? "meld--swap" : "") @(target ? "meld--target" : "") @(mine ? "meld--mine" : "")"
+                         data-meld-id="@meld.Id"
+                         @key="meld.Id"
+                         role="@(clickable ? "button" : null)"
+                         tabindex="@(clickable ? 0 : null)"
+                         @onclick="@(() => MeldClick(meld.Id))">
                         <div class="meld__head">
                             <span class="meld__kind">@(meld.Kind == MeldKind.Trio ? "TRÍO" : "ESCALERA") @meld.Cards.Count</span>
+                            @if (swappable && Swapping is null)
+                            {
+                                <span class="meld__tag">★ canje</span>
+                            }
                             <span class="meld__owner">
                                 <span class="meld__dot" aria-hidden="true"></span>@(mine ? "Tú" : meld.OwnerName)
                             </span>
@@ -255,7 +283,14 @@ else
             </button>
 
             <button class="btn btn--icon" @onclick="@(() => ShowRules = true)" aria-label="Reglas">?</button>
-            <button class="btn btn--icon" @onclick="@(() => ShowScores = true)" aria-label="Puntuaciones">📊</button>
+
+            <button class="btn btn--icon btn--badged" @onclick="OpenChat" aria-label="Charla de la mesa">
+                💬
+                @if (Unread > 0)
+                {
+                    <span class="btn__badge">@(Unread > 9 ? "9+" : Unread.ToString())</span>
+                }
+            </button>
 
             <button class="btn btn--icon" @onclick="ToggleMute"
                     aria-label="@(Audio.Muted ? "Activar sonido" : "Silenciar")">
@@ -293,6 +328,16 @@ else
                         Robar (@steal.SecondsLeft s)
                     </button>
                 </div>
+            </div>
+        }
+
+        @if (Swapping is { } swap && Choosing is null)
+        {
+            <div class="placing" role="status">
+                <span class="placing__text">
+                    Entregas <strong>@swap.Replacement.Label</strong>. Toca el juego donde va el <strong>comodín</strong>.
+                </span>
+                <button class="btn btn--sm" @onclick="CancelSwap">Cancelar</button>
             </div>
         }
 
@@ -348,6 +393,57 @@ else
                           AdvanceLabel="Jugar otra vez" />
         }
 
+        @if (ShowChat)
+        {
+            <div class="chat" role="dialog" aria-label="Charla de la mesa">
+                <div class="chat__head">
+                    <div class="chat__title">Charla <span>@View.Players.Count en la mesa</span></div>
+                    <button class="btn btn--ghost btn--icon" @onclick="@(() => ShowChat = false)" aria-label="Cerrar">✕</button>
+                </div>
+
+                <div class="chat__list">
+                    @if (View.Chat.Count == 0)
+                    {
+                        <div class="chat__empty">
+                            Aquí se pica, se celebra y se protesta. Di algo, que los demás también hablan.
+                        </div>
+                    }
+
+                    @foreach (var line in View.Chat.AsEnumerable().Reverse())
+                    {
+                        var mine = line.PlayerId == View.YouId;
+
+                        <div class="msg seat--s@(Accent(SeatOf(line.PlayerId))) @(mine ? "msg--mine" : "")" @key="line.Seq">
+                            @if (!mine)
+                            {
+                                <span class="msg__avatar">@Initial(line.Name)</span>
+                            }
+                            <span class="msg__body">
+                                @if (!mine)
+                                {
+                                    <span class="msg__name">@line.Name</span>
+                                }
+                                <span class="msg__text">@line.Text</span>
+                            </span>
+                        </div>
+                    }
+                </div>
+
+                <div class="chat__quick">
+                    @foreach (var quick in QuickReplies)
+                    {
+                        <button class="chip" @onclick="@(() => SendChat(quick))">@quick</button>
+                    }
+                </div>
+
+                <div class="chat__form">
+                    <input class="chat__input" maxlength="160" placeholder="Escribe algo a la mesa…"
+                           @bind="Draft" @bind:event="oninput" @onkeydown="OnChatKey" />
+                    <button class="btn btn--primary chat__send" disabled="@(string.IsNullOrWhiteSpace(Draft))"
+                            @onclick="@(() => SendChat(Draft))">Enviar</button>
+                </div>
+            </div>
+        }
     </div>
 }
 
@@ -384,6 +480,7 @@ else
     private HandSort SortMode = HandSort.BySuit;
     private bool ShowRules;
     private bool ShowScores;
+    private bool ShowChat;
     private bool Dealing;
     private int LastRound = -1;
     private int LastHandCount = -1;
@@ -398,8 +495,19 @@ else
 
     private HashSet<int>? PrevHandIds;
     private int PrevDiscardCount = -1;
+    private Dictionary<int, string>? PrevMeldCards;
+    private Dictionary<string, int>? PrevMeldSizes;
     private readonly List<Flight> Pending = [];
     private double[]? DiscardOrigin;
+    private readonly Dictionary<int, double[]> LayOrigins = [];
+
+    private string Draft = "";
+    private int LastSeenSeq;
+    private int LastHeardSeq;
+    private readonly Dictionary<int, DateTime> BubbleShownAt = [];
+    private static readonly TimeSpan BubbleLife = TimeSpan.FromSeconds(7.4);
+
+    private static readonly string[] QuickReplies = ["jajaja", "¡Qué morro!", "Venga, que es tu turno", "Buena jugada 👏", "Eso no vale", "😭"];
 
     private static readonly Card Hidden = new(-1, Suit.Spades, Rank.Two);
 
@@ -415,21 +523,42 @@ else
 
     private bool CanDraw => View is { YourTurn: true, Phase: GamePhase.Draw };
 
-    private bool CanDiscard => View is { YourTurn: true, Phase: GamePhase.Action } && Selected.Count == 1;
+    private bool CanAct => View is { YourTurn: true, Phase: GamePhase.Action };
+
+    private bool CanDiscard => CanAct && Selected.Count == 1 && Swapping is null;
 
     private string? Hint;
 
     private bool SelectionIsContract;
 
-    private bool CanTryLayDown => View is { YourTurn: true, Phase: GamePhase.Action }
+    private bool CanTryLayDown => CanAct
                                   && !(Me?.HasLaidDown ?? false)
                                   && Selected.Count > 0;
 
-    private bool CanExtend => View is { YourTurn: true, Phase: GamePhase.Action }
+    private bool CanExtend => CanAct
                               && Selected.Count == 1
                               && (Me?.HasLaidDown ?? false);
 
     private PlayerSummary? Me => View?.Players.FirstOrDefault(p => p.Id == View.YouId);
+
+    private int Unread => View is null ? 0 : View.Chat.Count(l => l.Seq > LastSeenSeq && l.PlayerId != View.YouId);
+
+    private IEnumerable<ChatLine> Bubbles
+    {
+        get
+        {
+            if (View is null || ShowChat)
+                yield break;
+
+            var now = DateTime.UtcNow;
+
+            foreach (var line in View.Chat.TakeLast(3))
+            {
+                if (BubbleShownAt.TryGetValue(line.Seq, out var shown) && now - shown < BubbleLife)
+                    yield return line;
+            }
+        }
+    }
 
     private static int Accent(int seat) => ((seat % 6) + 6) % 6;
 
@@ -458,6 +587,12 @@ else
         {
             Nav.NavigateTo("/");
             return;
+        }
+
+        if (Client.View is { } view)
+        {
+            LastSeenSeq = view.Chat.Count > 0 ? view.Chat[^1].Seq : 0;
+            LastHeardSeq = LastSeenSeq;
         }
 
         Client.Changed += OnChanged;
@@ -495,6 +630,7 @@ else
             {
                 LastRound = view.RoundIndex;
                 Dealing = true;
+                Swapping = null;
                 _ = ClearDealingSoon();
             }
 
@@ -506,12 +642,60 @@ else
                 RefreshSelection();
             }
 
+            if (Swapping is { } swap && (!view.YourTurn || view.Hand.All(c => c.Id != swap.CardId)))
+                Swapping = null;
+
             Sonify(view);
             QueueFlights(view);
+            TrackChat(view);
         }
 
         StateHasChanged();
     });
+
+    private void TrackChat(PlayerView view)
+    {
+        var now = DateTime.UtcNow;
+        var heard = LastHeardSeq;
+        var fresh = false;
+
+        foreach (var line in view.Chat)
+        {
+            if (BubbleShownAt.ContainsKey(line.Seq))
+                continue;
+
+            if (line.Seq <= heard)
+            {
+                BubbleShownAt[line.Seq] = DateTime.MinValue;
+                continue;
+            }
+
+            BubbleShownAt[line.Seq] = now;
+            LastHeardSeq = line.Seq;
+            fresh = true;
+
+            if (line.PlayerId != view.YouId)
+                Audio.Play(Sfx.Chat);
+        }
+
+        if (ShowChat)
+            LastSeenSeq = view.Chat.Count > 0 ? Math.Max(LastSeenSeq, view.Chat[^1].Seq) : LastSeenSeq;
+
+        if (BubbleShownAt.Count > 120)
+        {
+            foreach (var stale in BubbleShownAt.Where(kv => now - kv.Value > BubbleLife).Select(kv => kv.Key).ToList())
+                BubbleShownAt.Remove(stale);
+        }
+
+        if (fresh)
+            _ = ExpireBubblesSoon();
+    }
+
+    private async Task ExpireBubblesSoon()
+    {
+        await Task.Delay(BubbleLife + TimeSpan.FromMilliseconds(250));
+        await InvokeAsync(StateHasChanged);
+    }
 
     private void QueueFlights(PlayerView view)
     {
@@ -538,8 +722,6 @@ else
             }
         }
 
-        PrevHandIds = handIds;
-
         if (PrevDiscardCount >= 0 && view.DiscardCount > PrevDiscardCount && view.DiscardTop is not null)
         {
             if (view.DiscardOwnerId == view.YouId && DiscardOrigin is not null)
@@ -551,6 +733,68 @@ else
         }
 
         PrevDiscardCount = view.DiscardCount;
+
+        QueueMeldFlights(view);
+
+        PrevHandIds = handIds;
+        PrevMeldCards = view.Table.SelectMany(m => m.Cards.Select(c => (c.Id, m.Id)))
+                            .ToDictionary(x => x.Item1, x => x.Item2);
+        PrevMeldSizes = view.Table.ToDictionary(m => m.Id, m => m.Cards.Count);
+    }
+
+    private void QueueMeldFlights(PlayerView view)
+    {
+        if (PrevMeldCards is null || Dealing)
+        {
+            LayOrigins.Clear();
+            return;
+        }
+
+        var actor = view.Players.FirstOrDefault(p => p.IsCurrent);
+        var swapped = false;
+        var arrivals = 0;
+
+        foreach (var meld in view.Table)
+        {
+            var isNew = PrevMeldSizes is null || !PrevMeldSizes.ContainsKey(meld.Id);
+            var gained = 0;
+
+            foreach (var card in meld.Cards)
+            {
+                if (PrevMeldCards.TryGetValue(card.Id, out var previous) && previous == meld.Id)
+                    continue;
+
+                var delay = Math.Min(gained, 8) * 70 + Math.Min(arrivals, 3) * 40;
+                var target = CardFlight.CardAt(card.Id);
+
+                if (LayOrigins.TryGetValue(card.Id, out var rect))
+                    Pending.Add(new Flight(target, null, rect, Flip: false, delay));
+                else if (previous is not null)
+                    Pending.Add(new Flight(target, CardFlight.MeldAt(previous), null, Flip: false, delay));
+                else if (PrevHandIds is not null && PrevHandIds.Contains(card.Id))
+                    Pending.Add(new Flight(target, CardFlight.Hand, null, Flip: false, delay));
+                else
+                {
+                    var from = actor is not null && actor.Id != view.YouId ? actor.Id : meld.OwnerId;
+                    Pending.Add(new Flight(target, CardFlight.Seat(from), null, Flip: true, delay));
+                }
+
+                gained++;
+            }
+
+            if (gained > 0)
+            {
+                arrivals++;
+
+                if (!isNew && PrevMeldSizes is not null && PrevMeldSizes[meld.Id] == meld.Cards.Count)
+                    swapped = true;
+            }
+        }
+
+        if (swapped)
+            Audio.Play(Sfx.Swap);
+
+        LayOrigins.Clear();
     }
 
     private void Sonify(PlayerView view)
@@ -601,11 +845,13 @@ else
             if (view.Phase == GamePhase.RoundEnd)
             {
                 ShowScores = false;
+                ShowChat = false;
                 Celebrate(view, isGameOver: false);
             }
             else if (view.Phase == GamePhase.GameOver)
             {
                 ShowScores = false;
+                ShowChat = false;
                 Celebrate(view, isGameOver: true);
             }
         }
@@ -658,8 +904,38 @@ else
         StateHasChanged();
     }
 
+    private void OpenChat()
+    {
+        ShowChat = true;
+
+        if (View is { Chat.Count: > 0 } view)
+            LastSeenSeq = view.Chat[^1].Seq;
+    }
+
+    private async Task OnChatKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SendChat(Draft);
+    }
+
+    private async Task SendChat(string text)
+    {
+        var clean = text.Trim();
+
+        if (clean.Length == 0)
+            return;
+
+        Draft = "";
+        Audio.Play(Sfx.Tap);
+
+        await Send(new ClientMessage { Type = MessageType.Chat, Text = clean });
+    }
+
     private void ToggleCard(int cardId)
     {
+        if (Swapping is not null)
+            Swapping = null;
+
         if (Selected.Add(cardId))
             PickOrder.Add(cardId);
         else
@@ -773,8 +1049,6 @@ else
         return picked;
     }
 
-    // Antes de bajarse: si en alguna escalera el comodín puede ir a los dos extremos,
-    // el jugador elige qué carta hace. Se recorren una a una.
     private async Task AskJokerPlacement(List<MeldSpec> specs, int from)
     {
         if (View is not { } view)
@@ -816,6 +1090,8 @@ else
 
     private async Task SendLayDown(List<MeldSpec> specs)
     {
+        await RememberOrigins(specs.SelectMany(s => s.CardIds).ToList());
+
         await Send(new ClientMessage
         {
             Type = MessageType.LayDown,
@@ -823,6 +1099,14 @@ else
         });
 
         ClearSelection();
+    }
+
+    private async Task RememberOrigins(IReadOnlyList<int> cardIds)
+    {
+        LayOrigins.Clear();
+
+        foreach (var (id, rect) in await Flights.CaptureCardsAsync(cardIds))
+            LayOrigins[id] = rect;
     }
 
     private void ClearSelection()
@@ -876,7 +1160,11 @@ else
 
     private sealed record PendingChoice(string Title, List<Choice> Choices);
 
+    private sealed record PendingSwap(string SourceMeldId, int CardId, Card Replacement, int JokerIndex, Card Joker);
+
     private PendingChoice? Choosing;
+
+    private PendingSwap? Swapping;
 
     private static Meld ToMeld(MeldView view) => new()
     {
@@ -899,6 +1187,35 @@ else
         await choice.Run();
     }
 
+    private (bool Droppable, bool Swappable, bool Target) MeldState(MeldView meld)
+    {
+        if (View is null)
+            return (false, false, false);
+
+        if (Swapping is not null)
+            return (false, false, SwapFitsFor(meld.Id).Count > 0);
+
+        if (!CanExtend)
+            return (false, false, false);
+
+        var cardId = Selected.First();
+        var card = View.Hand.FirstOrDefault(c => c.Id == cardId);
+
+        if (card.Id != cardId)
+            return (false, false, false);
+
+        var model = ToMeld(meld);
+        var options = View.Options;
+
+        var droppable = (options.CanExtendOpponentMelds || meld.OwnerId == View.YouId)
+                        && MeldValidator.ExtendPositions(model, card, options).Count > 0;
+
+        return (droppable, JokerIndexFor(model, card, options) >= 0, false);
+    }
+
+    private Task MeldClick(string meldId)
+        => Swapping is null ? Extend(meldId) : PlaceJokerAt(meldId);
+
     private async Task Extend(string meldId)
     {
         if (!CanExtend || View is null)
@@ -915,7 +1232,9 @@ else
         var options = View.Options;
         var choices = new List<Choice>();
 
-        var ends = MeldValidator.ExtendPositions(meld, card, options);
+        var ends = (options.CanExtendOpponentMelds || meld.OwnerId == View.YouId)
+            ? MeldValidator.ExtendPositions(meld, card, options)
+            : [];
 
         if (ends.Count > 1)
         {
@@ -937,12 +1256,20 @@ else
             choices.Add(new Choice($"Poner {card.Label}", false, () => SendExtend(meldId, cardId, slot)));
         }
 
-        if (CanSwapHere(meld, card, options))
-            choices.Add(new Choice($"Canjear el comodín por {card.Label}", true, () => SendSwap(meldId, cardId)));
+        var jokerIndex = JokerIndexFor(meld, card, options);
+
+        if (jokerIndex >= 0)
+            choices.Add(new Choice($"Canjear el comodín por {card.Label}", true, () => BeginSwap(meld, cardId, card, jokerIndex)));
 
         switch (choices.Count)
         {
             case 0:
+                if (!options.CanExtendOpponentMelds && meld.OwnerId != View.YouId)
+                    Hint = "En esta variante solo puedes ampliar tus propios juegos.";
+                else
+                    Hint = $"{card.Label} no encaja en ese juego.";
+
+                Audio.Play(Sfx.Error);
                 return;
 
             case 1:
@@ -955,28 +1282,140 @@ else
         }
     }
 
-    private bool CanSwapHere(Meld meld, Card card, GameOptions options)
+    private int JokerIndexFor(Meld meld, Card card, GameOptions options)
     {
         if (options.JokerSwapMode == JokerSwap.Off || meld.Kind != MeldKind.Escalera || card.IsJoker)
-            return false;
+            return -1;
 
         if (options.JokerSwapMode == JokerSwap.OwnerOnly && meld.OwnerId != View?.YouId)
-            return false;
+            return -1;
 
         for (var i = 0; i < meld.Size; i++)
         {
             if (MeldValidator.JokerStandsFor(meld, i, options) is { } stands
                 && stands.Rank == card.Rank && stands.Suit == card.Suit)
             {
-                return true;
+                return i;
             }
         }
 
-        return false;
+        return -1;
+    }
+
+    private async Task BeginSwap(Meld source, int cardId, Card replacement, int jokerIndex)
+    {
+        if (View is null)
+            return;
+
+        Swapping = new PendingSwap(source.Id, cardId, replacement, jokerIndex, source.Cards[jokerIndex]);
+
+        var destinations = View.Table
+            .Select(m => (m.Id, Fits: SwapFitsFor(m.Id)))
+            .Where(d => d.Fits.Count > 0)
+            .ToList();
+
+        var slots = destinations.Sum(d => d.Fits.Count);
+
+        if (slots == 0)
+        {
+            Swapping = null;
+            Hint = "El comodín no cabe en ningún juego sin romperlo.";
+            Audio.Play(Sfx.Error);
+            return;
+        }
+
+        if (slots == 1)
+        {
+            var only = destinations[0];
+            await SendSwap(source.Id, cardId, only.Id == source.Id ? null : only.Id, only.Fits[0]);
+            return;
+        }
+
+        Hint = null;
+        Audio.Play(Sfx.Select);
+    }
+
+    private void CancelSwap()
+    {
+        Swapping = null;
+        Audio.Play(Sfx.Tap);
+    }
+
+    private IReadOnlyList<int> SwapFitsFor(string meldId)
+    {
+        if (View is null || Swapping is not { } swap)
+            return [];
+
+        var targetView = View.Table.FirstOrDefault(m => m.Id == meldId);
+        var sourceView = View.Table.FirstOrDefault(m => m.Id == swap.SourceMeldId);
+
+        if (targetView is null || sourceView is null)
+            return [];
+
+        var options = View.Options;
+
+        if (targetView.OwnerId != View.YouId && !options.CanExtendOpponentMelds)
+            return [];
+
+        var probe = ToMeld(targetView);
+
+        if (targetView.Id == sourceView.Id)
+        {
+            if (swap.JokerIndex >= probe.Cards.Count || !probe.Cards[swap.JokerIndex].IsJoker)
+                return [];
+
+            probe.Cards[swap.JokerIndex] = swap.Replacement;
+        }
+
+        return MeldValidator.ExtendPositions(probe, swap.Joker, options);
+    }
+
+    private async Task PlaceJokerAt(string meldId)
+    {
+        if (View is null || Swapping is not { } swap)
+            return;
+
+        var fits = SwapFitsFor(meldId);
+
+        if (fits.Count == 0)
+        {
+            Hint = "Ahí el comodín no cabe.";
+            Audio.Play(Sfx.Error);
+            return;
+        }
+
+        var targetId = meldId == swap.SourceMeldId ? null : meldId;
+
+        if (fits.Count == 1)
+        {
+            await SendSwap(swap.SourceMeldId, swap.CardId, targetId, fits[0]);
+            return;
+        }
+
+        var targetView = View.Table.First(m => m.Id == meldId);
+        var probe = ToMeld(targetView);
+
+        if (targetId is null)
+            probe.Cards[swap.JokerIndex] = swap.Replacement;
+
+        var choices = new List<Choice>();
+
+        foreach (var (slot, side) in new[] { (fits[0], "izquierda"), (fits[^1], "derecha") })
+        {
+            var trial = new List<Card>(probe.Cards);
+            trial.Insert(slot, swap.Joker);
+
+            choices.Add(new Choice($"A la {side}, haciendo de {JokerName(trial, slot, View.Options)}", false,
+                                   () => SendSwap(swap.SourceMeldId, swap.CardId, targetId, slot)));
+        }
+
+        Choosing = new PendingChoice("¿Por qué lado va el comodín?", choices);
     }
 
     private async Task SendExtend(string meldId, int cardId, int position)
     {
+        await RememberOrigins([cardId]);
+
         await Send(new ClientMessage
         {
             Type = MessageType.Extend,
@@ -988,13 +1427,19 @@ else
         ClearSelection();
     }
 
-    private async Task SendSwap(string meldId, int cardId)
+    private async Task SendSwap(string meldId, int cardId, string? targetMeldId, int position)
     {
+        Swapping = null;
+
+        await RememberOrigins([cardId]);
+
         await Send(new ClientMessage
         {
             Type = MessageType.SwapJoker,
             MeldId = meldId,
-            CardId = cardId
+            CardId = cardId,
+            TargetMeldId = targetMeldId,
+            Position = position
         });
 
         ClearSelection();

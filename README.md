@@ -176,6 +176,14 @@ Lo que hace que se vea natural y no mecánico:
 
 Se dispara desde los cambios de estado, así que el descarte de un bot se ve igual que el tuyo.
 
+Bajarse, colocar y canjear usan el mismo mecanismo: cada carta nueva en un juego vuela hasta
+su hueco con un escalonado de 70 ms. Las tuyas salen del sitio exacto que ocupaban en la mano
+(se capturan sus rectángulos justo antes de enviar la jugada); las de un bot salen de su
+asiento y se voltean por el camino; un comodín canjeado sale del juego donde estaba. Cuando
+el origen no es una carta (un asiento, la mano), el fantasma se ajusta al tamaño de la carta
+centrado en ese elemento para que no aparezca gigante. El contenedor del juego entra con un
+brillo breve en vez de aparecer de golpe.
+
 ## Trampas resueltas (que no son obvias)
 
 - **`OverrideHtmlAssetPlaceholders` es obligatorio** en `Continental.WebClient`. Sin él el SDK
@@ -215,9 +223,39 @@ las reglas activas** desde el vestíbulo o durante la partida.
 | Valor del As | 20 | 30 |
 | As en escalera | alto, bajo y bisagra (K-A-2) | solo alto |
 | Trío con palos distintos | sí | no |
+| Comodines por trío | máximo 4 cartas en total | sin límite |
 
 Comunes a ambas: 2 barajas + 6 comodines, comodín 50 pts, figuras 10 pts, las siete rondas
-`TT → TE → EE → TTT → TTE → TEE → EEE`, robar de contra con carta de castigo, y −10 por
-bajarse y cerrar en la misma jugada.
+`TT → TE → EE → TTT → TTE → TEE → EEE`, robar de contra con carta de castigo, colocar en
+juegos ajenos, y −10 por bajarse y cerrar en la misma jugada.
+
+**Canje del comodín** (igual en las dos variantes, siguiendo las reglas de Fournier y las
+más extendidas en Latinoamérica): cualquier jugador que ya esté bajado puede quitar el
+comodín de **cualquier escalera** de la mesa entregando la carta exacta que tapa. El comodín
+liberado se coloca **en el acto** en cualquier juego donde encaje (otra escalera, un trío o
+un extremo de la misma escalera); nunca se guarda en la mano. En la app, con la carta
+seleccionada la escalera se marca con `★ canje`, y tras confirmar se toca el juego de
+destino. Los bots hacen exactamente la misma jugada.
+
+La hoja de reglas de la sala (`RulesSheet.razor`) documenta todo lo anterior con las dos
+variantes lado a lado.
+
+## Charla de la mesa
+
+Los bots hablan (`Continental.Core/Bots/BotBanter.cs`). Cada nombre tiene una voz
+(cuñado, pícara, zen, dramática, fanfarrón, abuela) y reaccionan a lo que pasa: bajarse,
+robar de contra, que les quiten un comodín, cerrar, quedarse la mano entera, que un humano
+tarde en jugar o que escriba en el chat. Se pican entre ellos con réplicas.
+
+La frecuencia está calibrada para parecer una mesa de amigos y no un bot de spam: cada línea
+sale con un retraso de escritura (se ve «está escribiendo…»), hay un hueco mínimo de 6 s
+entre líneas y de 16 s por bot, la cola nunca guarda más de tres, y los eventos rutinarios
+solo provocan comentario a veces. Un test simula partidas completas y comprueba que el
+ritmo queda entre 0,8 y 7 líneas por minuto.
+
+Los mensajes viajan en el estado (`PlayerView.Chat`), así que todos los asientos, app o
+navegador, ven lo mismo; los humanos escriben con el mensaje `chat`. En la mesa aparecen
+como bocadillos que se desvanecen solos, y el botón 💬 abre el historial con respuestas
+rápidas.
 
 Todo lo anterior es configurable en `GameOptions`; los dos presets son puntos de partida.
