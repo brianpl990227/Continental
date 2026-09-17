@@ -128,14 +128,14 @@ public class BotBanterTests
         banter.Tick(state, T0 + TimeSpan.FromSeconds(50));
         banter.Tick(state, T0 + TimeSpan.FromSeconds(90));
 
-        Assert.Single(banter.Pending, l => l.Text.Contains("Brian"));
+        Assert.Single(banter.Pending, l => l.Text.Contains("Brian") && !l.Text.Contains("Pepa") && !l.Text.Contains("Nino"));
 
         state.TurnStartedAt = T0 + TimeSpan.FromSeconds(100);
         banter.Due(T0 + TimeSpan.FromSeconds(200));
         banter.Tick(state, T0 + TimeSpan.FromSeconds(140));
         banter.Tick(state, T0 + TimeSpan.FromSeconds(150));
 
-        Assert.Single(banter.Pending, l => l.Text.Contains("Brian"));
+        Assert.Single(banter.Pending, l => l.Text.Contains("Brian") && !l.Text.Contains("Pepa") && !l.Text.Contains("Nino"));
     }
 
     [Fact]
@@ -240,6 +240,9 @@ public class BotBanterTests
                         $"dos líneas casi a la vez: '{ordered[i - 1].Text}' y '{ordered[i].Text}'");
 
         Assert.True(delivered.Select(l => l.BotId).Distinct().Count() >= 3, "casi siempre habla el mismo bot");
-        Assert.True(delivered.Select(l => l.Text).Distinct().Count() > delivered.Count * 0.6, "se repiten demasiado");
+        Assert.True(delivered.Select(l => l.Text).Distinct().Count() > delivered.Count * 0.85, "se repiten demasiado");
+
+        var byRound = delivered.GroupBy(l => l.Text).Where(g => g.Count() > 2).Select(g => g.Key).ToList();
+        Assert.True(byRound.Count == 0, "una frase salió tres veces en la misma partida: " + string.Join(" | ", byRound));
     }
 }

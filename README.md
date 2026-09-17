@@ -243,9 +243,21 @@ variantes lado a lado.
 ## Charla de la mesa
 
 Los bots hablan (`Continental.Core/Bots/BotBanter.cs`). Cada nombre tiene una voz
-(cuñado, pícara, zen, dramática, fanfarrón, abuela) y reaccionan a lo que pasa: bajarse,
-robar de contra, que les quiten un comodín, cerrar, quedarse la mano entera, que un humano
-tarde en jugar o que escriba en el chat. Se pican entre ellos con réplicas.
+(cuñado, pícara, zen, dramática, fanfarrón, abuela) con su propio repertorio, más de mil
+frases en total, y reaccionan a lo que pasa: bajarse, robar de contra, que les quiten un
+comodín, cerrar (y cerrar dos veces seguidas), quedarse la mano entera, ir primero en el
+total, que un humano tarde en jugar o que escriba en el chat. Las réplicas entre bots son
+coherentes con lo que se acaba de decir: a una fanfarronada le sigue un corte, a una queja
+un consuelo o una burla, a una pulla a un tercero una defensa o más leña.
+
+Lo que escribe un humano se clasifica por intención (saludo, risa, pregunta, quién va
+ganando, reglas, insulto, mala suerte, fanfarronada, comida, despedida, gracias, halago,
+comodín, cariño) y la respuesta usa datos reales de la partida: nombres, quién lidera y con
+cuántos puntos. Si nombras a un bot, contesta ese bot.
+
+Ninguna frase se repite hasta agotar su repertorio: cada bolsa de frases se baraja y se
+consume entera antes de volver a empezar. El simulador de partidas completas dio cero
+repeticiones en doce partidas.
 
 La frecuencia está calibrada para parecer una mesa de amigos y no un bot de spam: cada línea
 sale con un retraso de escritura (se ve «está escribiendo…»), hay un hueco mínimo de 6 s
