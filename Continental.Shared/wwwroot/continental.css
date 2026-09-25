@@ -604,7 +604,7 @@ h1[tabindex="-1"]:focus-visible {
 
 .took {
     position: absolute;
-    top: calc(100% + 8px);
+    bottom: calc(100% + 10px);
     left: 50%;
     z-index: 6;
     display: flex;
@@ -622,11 +622,11 @@ h1[tabindex="-1"]:focus-visible {
 }
 
 @keyframes took-life {
-    0% { opacity: 0; transform: translate(-50%, -10px) scale(0.9); }
+    0% { opacity: 0; transform: translate(-50%, 10px) scale(0.9); }
     8% { opacity: 1; transform: translate(-50%, 0) scale(1.04); }
     14% { transform: translate(-50%, 0) scale(1); }
     86% { opacity: 1; transform: translate(-50%, 0); }
-    100% { opacity: 0; transform: translate(-50%, 6px); }
+    100% { opacity: 0; transform: translate(-50%, -6px); }
 }
 
 .took__avatar {
