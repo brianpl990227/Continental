@@ -6,8 +6,11 @@
     Android  -> a signed APK for sideloading. By default arm64-v8a only, which is the
                 fastest build and enough for the developer's own phone. Pass -AllAbis for
                 the package that also installs on 32-bit phones; that is what CI ships.
-    Windows  -> a self-contained folder plus a zip. Self-contained means the machine needs
-                neither the .NET runtime nor the Windows App SDK installed.
+    Windows  -> a self-contained folder, a zip, and Continental.exe: a single file that carries
+                the zip inside, unpacks it to %LOCALAPPDATA%\Continental the first time and
+                starts it. WinUI cannot be published as one file, hence the launcher.
+                Self-contained means the machine needs neither the .NET runtime nor the
+                Windows App SDK installed.
 
     The APK is signed with build/continental.keystore. Keep that file: Android refuses to
     install an update signed with a different key, so losing it means uninstalling the app
@@ -141,8 +144,56 @@ if ($Target -in 'all', 'windows') {
     if (Test-Path $zip) { Remove-Item $zip -Force }
     Compress-Archive -Path (Join-Path $winOut '*') -DestinationPath $zip
 
+    Step 'Ejecutable único de Windows'
+
+    $launcherOut = Join-Path $dist 'launcher'
+    if (Test-Path $launcherOut) { Remove-Item $launcherOut -Recurse -Force }
+
+    $installer = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer'
+    if (-not (Get-Command vswhere.exe -ErrorAction SilentlyContinue) -and (Test-Path $installer)) {
+        $env:PATH = "$installer;$env:PATH"
+    }
+
+    $launcher = Join-Path $root 'Continental.Launcher'
+
+    dotnet publish $launcher -c Release --nologo -o $launcherOut
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host 'NativeAOT no está disponible; se usa un lanzador .NET de un solo fichero.' -ForegroundColor Yellow
+
+        dotnet publish $launcher -c Release --nologo -o $launcherOut `
+            -p:PublishAot=false -p:SelfContained=true -p:PublishSingleFile=true -p:PublishTrimmed=true `
+            -p:EnableCompressionInSingleFile=true
+
+        if ($LASTEXITCODE -ne 0) { throw 'Falló la publicación del lanzador.' }
+    }
+
+    $exe = Join-Path $dist 'Continental.exe'
+    $id = (Get-FileHash $zip -Algorithm SHA256).Hash.Substring(0, 16).ToLowerInvariant()
+    $idBytes = [System.Text.Encoding]::ASCII.GetBytes($id)
+    $magic = [System.Text.Encoding]::ASCII.GetBytes('CONTINENTAL-PAYLOAD-1')
+
+    $out = [System.IO.File]::Create($exe)
+    try {
+        foreach ($part in @((Join-Path $launcherOut 'Continental.exe'), $zip)) {
+            $in = [System.IO.File]::OpenRead($part)
+            try { $in.CopyTo($out) } finally { $in.Dispose() }
+        }
+
+        $out.Write($idBytes, 0, $idBytes.Length)
+        $out.Write([BitConverter]::GetBytes([long](Get-Item $zip).Length), 0, 8)
+        $out.Write([BitConverter]::GetBytes([int]$idBytes.Length), 0, 4)
+        $out.Write($magic, 0, $magic.Length)
+    }
+    finally {
+        $out.Dispose()
+    }
+
+    Remove-Item $launcherOut -Recurse -Force
+
     Write-Host "Carpeta: $winOut" -ForegroundColor Green
     Write-Host "Zip:     $zip  ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB)" -ForegroundColor Green
+    Write-Host "Exe:     $exe  ($([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB)" -ForegroundColor Green
 }
 
 Step 'Listo'

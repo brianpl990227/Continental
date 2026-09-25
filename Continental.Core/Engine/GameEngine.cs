@@ -139,11 +139,13 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         State.RoundIndex = 0;
         State.DealerIndex = _random.Next(State.Players.Count);
+        State.GameNumber++;
 
         foreach (var player in State.Players)
         {
             player.TotalScore = 0;
             player.RoundScores.Clear();
+            player.Tally = new MatchTally();
         }
 
         State.Chat.Clear();
@@ -174,6 +176,8 @@ public sealed class GameEngine(GameState state, Random? random = null)
             player.Hand.Clear();
             player.HasLaidDown = false;
             player.LaidDownThisTurn = false;
+            player.TurnsThisRound = 0;
+            player.SwapsThisRound = 0;
 
             for (var i = 0; i < count; i++)
                 player.Hand.Add(TakeFromStock());
@@ -243,6 +247,9 @@ public sealed class GameEngine(GameState state, Random? random = null)
             if (State.DiscardTop is not { } top)
                 return ActionResult.Fail("El pozo está vacío.");
 
+            CountTurn(player);
+            player.Tally.TookDiscard++;
+
             State.Discard.RemoveAt(State.Discard.Count - 1);
             player.Hand.Add(top);
             State.DiscardOwnerId = null;
@@ -254,6 +261,8 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
             return ActionResult.Success;
         }
+
+        CountTurn(player);
 
         if (ShouldOpenStealWindow(player))
         {
@@ -274,6 +283,20 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         CompleteStockDraw(player);
         return ActionResult.Success;
+    }
+
+    private static void CountTurn(PlayerState player)
+    {
+        player.TurnsThisRound++;
+        player.Tally.Turns++;
+    }
+
+    private void TrackEscalera(Meld meld)
+    {
+        if (meld.Kind != MeldKind.Escalera || State.Find(meld.OwnerId) is not { } owner)
+            return;
+
+        owner.Tally.LongestEscalera = Math.Max(owner.Tally.LongestEscalera, meld.Size);
     }
 
     private bool ShouldOpenStealWindow(PlayerState drawer)
@@ -320,6 +343,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
             player.Hand.Add(TakeFromStock());
 
         State.DiscardOwnerId = null;
+        player.Tally.Steals++;
         State.History.Add(new PublicMove(player.Id, offer.Card, MoveKind.Stole));
         State.Say($"{player.Name} robó de contra {offer.Card.Label} (+{State.Options.StealPenaltyCards} de castigo).");
         Emit(GameEventKind.Stole, player.Id, offer.BlockedPlayerId, offer.Card);
@@ -404,6 +428,14 @@ public sealed class GameEngine(GameState state, Random? random = null)
         player.HasLaidDown = true;
         player.LaidDownThisTurn = true;
 
+        player.Tally.LaidDownRounds.Add(State.RoundIndex);
+        player.Tally.TriosLaid += built.Count(m => m.Kind == MeldKind.Trio);
+        player.Tally.EscalerasLaid += built.Count(m => m.Kind == MeldKind.Escalera);
+        player.Tally.JokersLaid += built.Sum(m => m.Cards.Count(c => c.IsJoker));
+
+        foreach (var meld in built)
+            TrackEscalera(meld);
+
         State.Say($"{player.Name} se bajó con {contract.Describe()}.");
         Emit(GameEventKind.LaidDown, player.Id);
         Notify();
@@ -454,6 +486,13 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         meld.Cards.Insert(slot, card);
         player.Hand.RemoveAt(index);
+
+        player.Tally.Extensions++;
+
+        if (meld.OwnerId != playerId)
+            player.Tally.ExtensionsOnOthers++;
+
+        TrackEscalera(meld);
 
         if (meld.Kind == MeldKind.Trio)
             meld.TrioRank ??= card.IsJoker ? null : card.Rank;
@@ -556,6 +595,11 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         player.Hand.RemoveAt(handIndex);
 
+        player.SwapsThisRound++;
+        player.Tally.JokerSwaps++;
+        player.Tally.MaxSwapsInRound = Math.Max(player.Tally.MaxSwapsInRound, player.SwapsThisRound);
+        TrackEscalera(target);
+
         State.Say(ReferenceEquals(target, source)
             ? $"{player.Name} canjeó el comodín por {replacement.Label}."
             : $"{player.Name} canjeó el comodín por {replacement.Label} y lo movió de sitio.");
@@ -633,6 +677,17 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         var bonus = closer?.LaidDownThisTurn == true ? State.Options.CloseSameTurnBonus : 0;
 
+        if (closer is not null)
+        {
+            closer.Tally.ClosedRounds.Add(State.RoundIndex);
+
+            if (closer.LaidDownThisTurn)
+                closer.Tally.SameTurnCloseRounds.Add(State.RoundIndex);
+
+            if (closer.TurnsThisRound == 1)
+                closer.Tally.FirstTurnCloseRounds.Add(State.RoundIndex);
+        }
+
         foreach (var player in State.Players)
         {
             var points = player.Id == closer?.Id
@@ -704,6 +759,17 @@ public sealed class GameEngine(GameState state, Random? random = null)
         return ActionResult.Success;
     }
 
+    public ActionResult SetBadge(string playerId, PlayerBadge? badge)
+    {
+        if (State.Find(playerId) is not { IsBot: false } player)
+            return ActionResult.Fail("Jugador desconocido.");
+
+        player.Badge = PlayerBadge.Sanitize(badge);
+        Notify();
+
+        return ActionResult.Success;
+    }
+
     public ActionResult Chat(string playerId, string text)
     {
         var player = State.Find(playerId);
@@ -720,6 +786,7 @@ public sealed class GameEngine(GameState state, Random? random = null)
             clean = clean[..160];
 
         State.Talk(player, clean);
+        player.Tally.ChatMessages++;
         Emit(GameEventKind.ChatSaid, player.Id, text: clean);
         Notify();
 

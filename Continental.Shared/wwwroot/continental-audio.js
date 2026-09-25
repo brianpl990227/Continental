@@ -1,6 +1,25 @@
 let ctx = null;
 let master = null;
 let muted = false;
+let pack = null;
+
+const PACKS = {
+    clasico: {},
+    suave: { type: "sine", gain: 0.8, noise: 0.6, stretch: 1.25 },
+    retro: { type: "square", gain: 0.5, noise: 0.45, semitones: true, stretch: 0.8 },
+    casino: { type: "triangle", gain: 0.9, sparkle: true },
+    cristal: { type: "sine", gain: 0.75, octave: true, stretch: 1.6, noise: 0.7 }
+};
+
+function currentPack() {
+    if (pack) return PACKS[pack] || PACKS.clasico;
+
+    try {
+        return PACKS[document.documentElement.dataset.sound] || PACKS.clasico;
+    } catch {
+        return PACKS.clasico;
+    }
+}
 
 const MUTE_KEY = "continental.muted";
 
@@ -28,7 +47,9 @@ function noise(opts) {
     const c = context();
     if (!c || muted) return;
 
-    const { duration = 0.08, freq = 1800, q = 1.2, gain = 0.3, type = "bandpass", sweep = 0 } = opts;
+    const style = currentPack();
+    const { duration = 0.08, freq = 1800, q = 1.2, type = "bandpass", sweep = 0 } = opts;
+    const gain = (opts.gain ?? 0.3) * (style.noise ?? 1);
 
     const frames = Math.max(1, Math.floor(c.sampleRate * duration));
     const buffer = c.createBuffer(1, frames, c.sampleRate);
@@ -63,7 +84,18 @@ function tone(opts) {
     const c = context();
     if (!c || muted) return;
 
-    const { freq = 660, duration = 0.16, type = "triangle", gain = 0.16, delay = 0, glide = 0 } = opts;
+    const style = currentPack();
+    let { freq = 660, duration = 0.16, type = "triangle", gain = 0.16, delay = 0, glide = 0 } = opts;
+
+    if (style.type && !opts.keep) type = style.type;
+    if (style.gain) gain *= style.gain;
+    if (style.stretch) duration *= style.stretch;
+    if (style.octave) freq *= 2;
+    if (style.semitones) freq = 440 * Math.pow(2, Math.round(12 * Math.log2(freq / 440)) / 12);
+
+    if (style.sparkle && !opts.child) {
+        tone({ ...opts, freq: freq * 2, gain: (opts.gain ?? 0.16) * 0.3, delay: delay + 0.025, child: true });
+    }
 
     const osc = c.createOscillator();
     osc.type = type;
@@ -224,6 +256,104 @@ const sounds = {
         tone({ freq: 1318.5, duration: 0.09, type: "sine", gain: 0.05, delay: 0.07 });
     },
 
+    mission() {
+        chord([659.25, 783.99, 987.77, 1318.5], { stagger: 0.075, duration: 0.42, gain: 0.12 });
+        tone({ freq: 1567.98, duration: 0.6, type: "sine", gain: 0.07, delay: 0.34 });
+
+        const c = context();
+        if (!c || muted) return;
+
+        for (let i = 0; i < 8; i++) {
+            setTimeout(() => noise({ duration: 0.04, freq: rand(5000, 9000), q: 3, gain: 0.05, sweep: 1.4 }), 300 + i * rand(40, 80));
+        }
+    },
+
+    levelup() {
+        chord([392.0, 523.25, 659.25, 783.99], { stagger: 0.09, duration: 0.35, gain: 0.12 });
+        chord([523.25, 659.25, 783.99, 1046.5, 1318.5], { stagger: 0.06, duration: 0.8, gain: 0.12 });
+        tone({ freq: 2093.0, duration: 0.9, type: "sine", gain: 0.05, delay: 0.7 });
+
+        const c = context();
+        if (!c || muted) return;
+
+        for (let i = 0; i < 18; i++) {
+            setTimeout(() => noise({ duration: 0.05, freq: rand(4000, 10000), q: 2.4, gain: 0.06, sweep: 1.6 }), 450 + i * rand(35, 80));
+        }
+    },
+
+    victory() {
+        const c = context();
+        if (!c || muted) return;
+
+        [0, 0.12, 0.24].forEach(d => tone({ freq: 82, duration: 0.22, type: "sine", gain: 0.24, delay: d, keep: true }));
+        [[523.25, 0.3], [523.25, 0.45], [523.25, 0.6], [659.25, 0.78], [783.99, 1.02]].forEach(([f, d]) =>
+            tone({ freq: f, duration: 0.2, type: "sawtooth", gain: 0.07, delay: d }));
+        setTimeout(() => chord([523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98], { stagger: 0.04, duration: 1.4, gain: 0.11 }), 1250);
+        tone({ freq: 2093.0, duration: 1.2, type: "sine", gain: 0.05, delay: 1.6 });
+
+        for (let i = 0; i < 26; i++) {
+            setTimeout(() => noise({ duration: 0.05, freq: rand(4000, 10000), q: 2.4, gain: 0.06, sweep: 1.6 }), 1250 + i * rand(30, 90));
+        }
+    },
+
+    defeat() {
+        const c = context();
+        if (!c || muted) return;
+
+        const notes = [[392.0, 0, 0.42], [369.99, 0.5, 0.42], [349.23, 1.0, 0.42], [329.63, 1.5, 1.4]];
+
+        notes.forEach(([freq, delay, duration], i) => {
+            const at = c.currentTime + delay;
+            const osc = c.createOscillator();
+            osc.type = "sawtooth";
+            osc.frequency.setValueAtTime(freq * 1.03, at);
+            osc.frequency.exponentialRampToValueAtTime(freq, at + 0.12);
+
+            if (i === 3) {
+                const wobble = c.createOscillator();
+                wobble.frequency.value = 5;
+                const depth = c.createGain();
+                depth.gain.value = 9;
+                wobble.connect(depth).connect(osc.frequency);
+                wobble.start(at + 0.25);
+                wobble.stop(at + duration);
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.82, at + duration);
+            }
+
+            const filter = c.createBiquadFilter();
+            filter.type = "lowpass";
+            filter.frequency.value = 900;
+
+            const env = c.createGain();
+            env.gain.setValueAtTime(0, at);
+            env.gain.linearRampToValueAtTime(0.13, at + 0.05);
+            env.gain.setValueAtTime(0.13, at + duration - 0.15);
+            env.gain.exponentialRampToValueAtTime(0.0001, at + duration);
+
+            osc.connect(filter).connect(env).connect(master);
+            osc.start(at);
+            osc.stop(at + duration + 0.05);
+        });
+    },
+
+    start() {
+        const c = context();
+        if (!c || muted) return;
+
+        [0, 0.14, 0.28].forEach((d, i) => tone({ freq: 98 + i * 8, duration: 0.18, type: "sine", gain: 0.2, delay: d, keep: true }));
+        chord([392.0, 523.25, 659.25, 783.99, 1046.5], { stagger: 0.05, duration: 0.7, gain: 0.12 });
+        tone({ freq: 1567.98, duration: 0.8, type: "sine", gain: 0.05, delay: 0.3 });
+
+        for (let i = 0; i < 12; i++) {
+            setTimeout(() => noise({ duration: 0.05, freq: rand(4000, 9000), q: 2.4, gain: 0.05, sweep: 1.6 }), 250 + i * rand(30, 70));
+        }
+    },
+
+    unlock() {
+        tone({ freq: 1046.5, duration: 0.14, type: "sine", gain: 0.08 });
+        tone({ freq: 1567.98, duration: 0.3, type: "sine", gain: 0.08, delay: 0.1 });
+    },
+
     swap() {
         noise({ duration: 0.06, freq: rand(2200, 2800), q: 1.2, gain: 0.16, sweep: 0.6 });
         chord([783.99, 1046.5], { stagger: 0.07, duration: 0.22, gain: 0.09 });
@@ -236,6 +366,22 @@ export function play(name) {
         if (fn) fn();
     } catch {
 
+    }
+}
+
+export function playWith(name, packName) {
+    const previous = pack;
+    const wasMuted = muted;
+    pack = packName;
+    muted = false;
+
+    try {
+        const fn = sounds[name];
+        if (fn) fn();
+    } catch {
+    } finally {
+        pack = previous;
+        muted = wasMuted;
     }
 }
 

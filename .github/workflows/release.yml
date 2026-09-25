@@ -116,7 +116,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/Continental-Windows.zip
+          path: dist/Continental.exe
           if-no-files-found: error
 
   release:
@@ -138,7 +138,7 @@ jobs:
 
           cat > notes.md <<'EOF'
           - **Continental.apk** — APK universal (arm64-v8a, armeabi-v7a y x86_64). Vale para cualquier movil desde Android 7, sea de 32 o de 64 bits.
-          - **Continental-Windows.zip** — Windows 10/11 x64, autocontenido: no hace falta instalar .NET ni el Windows App SDK.
+          - **Continental.exe** — Windows 10/11 x64. Un solo fichero: se abre con doble clic, sin instalar .NET ni el Windows App SDK. La primera vez tarda un par de segundos más mientras se prepara.
 
           Si el movil dice "La aplicacion no esta instalada", ya tienes una copia firmada con otra clave: desinstalala antes.
           EOF
@@ -150,4 +150,4 @@ jobs:
             --title "Continental $TAG" \
             --notes-file notes.md \
             dist/Continental.apk \
-            dist/Continental-Windows.zip
+            dist/Continental.exe

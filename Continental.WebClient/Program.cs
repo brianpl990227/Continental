@@ -11,6 +11,8 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddSingleton<IGameHost, NoGameHost>();
 builder.Services.AddSingleton<IRoomDiscovery, NoRoomDiscovery>();
 builder.Services.AddSingleton<IGameJoiner, WebSocketJoiner>();
+builder.Services.AddSingleton<IProfileStorage, NoProfileStorage>();
+builder.Services.AddScoped<ProgressService>();
 builder.Services.AddScoped<AppState>();
 builder.Services.AddScoped<GameAudio>();
 builder.Services.AddScoped<CardFlight>();

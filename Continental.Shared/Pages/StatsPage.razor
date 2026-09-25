@@ -1,0 +1,320 @@
+@page "/stats"
+@inject ProgressService Progress
+
+<ProfileShell Tab="stats" Heading="Estadísticas">
+    @if (Games == 0)
+    {
+        <div class="empty" style="margin-top:8px">
+            <span style="font-size:30px">🃏</span>
+            <span>Todavía no has terminado ninguna partida.</span>
+            <span>Juega una y aquí verás tus victorias, tus rachas, tus rivales y en qué ronda brillas.</span>
+        </div>
+    }
+    else
+    {
+        <div class="kpis">
+            <div class="kpi">
+                <span class="kpi__n">@Games</span>
+                <span class="kpi__l">partidas</span>
+            </div>
+            <div class="kpi kpi--good">
+                <span class="kpi__n">@Won</span>
+                <span class="kpi__l">ganadas</span>
+            </div>
+            <div class="kpi">
+                <span class="kpi__n">@Lost</span>
+                <span class="kpi__l">perdidas</span>
+            </div>
+            <div class="kpi kpi--hero">
+                <span class="kpi__n">@WinRate<small>%</small></span>
+                <span class="kpi__l">de victorias</span>
+            </div>
+        </div>
+
+        <div class="streaks">
+            <div class="streak">
+                <span class="streak__icon">@(P.WinStreak > 0 ? "🔥" : P.LossStreak > 0 ? "🧊" : "➖")</span>
+                <span class="streak__text">
+                    <strong>@StreakText</strong>
+                    <span>racha actual</span>
+                </span>
+            </div>
+            <div class="streak">
+                <span class="streak__icon">📈</span>
+                <span class="streak__text"><strong>@L(Stat.BestWinStreak)</strong><span>mejor racha</span></span>
+            </div>
+            <div class="streak">
+                <span class="streak__icon">🗓️</span>
+                <span class="streak__text"><strong>@P.DayStreak</strong><span>días seguidos</span></span>
+            </div>
+            <div class="streak">
+                <span class="streak__icon">📅</span>
+                <span class="streak__text"><strong>@L(Stat.DaysPlayed)</strong><span>días jugados</span></span>
+            </div>
+        </div>
+
+        <div class="section-title">Puntos <span class="section-title__hint">menos es mejor</span></div>
+
+        <div class="tiles">
+            <div class="tile"><span class="tile__n">@Avg(P.TotalPoints, Games)</span><span class="tile__l">media por partida</span></div>
+            <div class="tile"><span class="tile__n">@(P.BestScore?.ToString() ?? "—")</span><span class="tile__l">mejor partida</span></div>
+            <div class="tile"><span class="tile__n">@(P.WorstScore?.ToString() ?? "—")</span><span class="tile__l">peor partida</span></div>
+            <div class="tile"><span class="tile__n">@Avg(P.ContractPoints.Sum(), P.ContractRounds.Sum())</span><span class="tile__l">media por ronda</span></div>
+        </div>
+
+        @if (Recent.Count >= 2)
+        {
+            <div class="chart" role="img" aria-label="Puntos de tus últimas @Recent.Count partidas">
+                <div class="chart__head">
+                    <span>Tus últimas @Recent.Count partidas</span>
+                    <span class="chart__legend"><i class="dot dot--win"></i>ganada <i class="dot"></i>perdida</span>
+                </div>
+                <svg class="spark" viewBox="0 0 @SparkW @SparkH" preserveAspectRatio="none">
+                    <line class="spark__grid" x1="0" x2="@SparkW" y1="@Y(0)" y2="@Y(0)" />
+                    <polyline class="spark__line" points="@SparkPoints" />
+                    @for (var i = 0; i < Recent.Count; i++)
+                    {
+                        var game = Recent[i];
+                        <g class="spark__hit">
+                            <circle class="spark__halo" cx="@X(i)" cy="@Y(game.Score)" r="12" />
+                            <circle class="spark__dot @(game.Won ? "spark__dot--win" : "")" cx="@X(i)" cy="@Y(game.Score)" r="4.5" />
+                            <title>@Describe(game)</title>
+                        </g>
+                    }
+                </svg>
+                <div class="chart__axis">
+                    <span>@Fmt(Recent[0].At)</span>
+                    <span>máx. @SparkMax pts</span>
+                    <span>@Fmt(Recent[^1].At)</span>
+                </div>
+            </div>
+        }
+
+        <div class="section-title">Por ronda <span class="section-title__hint">puntos medios · cierres</span></div>
+
+        <div class="contracts">
+            @for (var r = 0; r < RoundContract.Standard.Count; r++)
+            {
+                var avg = ContractAvg(r);
+                var closes = L(Stats.ClosesByContract[r]);
+                var played = r < P.ContractRounds.Count ? P.ContractRounds[r] : 0;
+
+                <div class="contract @(r == BestContract ? "contract--best" : "") @(r == WorstContract ? "contract--worst" : "")"
+                     title="@RoundContract.Standard[r].Describe(): @(avg?.ToString("0.#") ?? "—") pts de media en @played rondas, cerradas @closes">
+                    <span class="contract__code">@RoundContract.Standard[r].Code</span>
+                    <span class="contract__track">
+                        <span class="contract__bar" style="width:@BarWidth(avg)"></span>
+                    </span>
+                    <span class="contract__avg">@(avg is { } a ? a.ToString("0") : "—")</span>
+                    <span class="contract__closes">@closes 🚪</span>
+                </div>
+            }
+        </div>
+
+        @if (BestContract >= 0 && WorstContract >= 0 && BestContract != WorstContract)
+        {
+            <p class="stats__note">
+                Brillas en <strong>@RoundContract.Standard[BestContract].Describe()</strong>
+                y sufres en <strong>@RoundContract.Standard[WorstContract].Describe()</strong>.
+            </p>
+        }
+
+        <div class="section-title">Tu forma de jugar</div>
+
+        <div class="tiles tiles--dense">
+            <div class="tile"><span class="tile__n">@L(Stat.RoundsClosed)</span><span class="tile__l">rondas cerradas</span></div>
+            <div class="tile"><span class="tile__n">@Pct(L(Stat.RoundsClosed), L(Stat.RoundsPlayed))</span><span class="tile__l">de rondas cerradas</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.RoundsLaidDown)</span><span class="tile__l">veces bajado</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.SameTurnCloses)</span><span class="tile__l">bajar y cerrar de golpe</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.FirstTurnCloses)</span><span class="tile__l">cierres en el 1er turno</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.ZeroRounds)</span><span class="tile__l">rondas a 0 o menos</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.Steals)</span><span class="tile__l">robos de contra</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.JokerSwaps)</span><span class="tile__l">comodines canjeados</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.JokersLaid)</span><span class="tile__l">comodines bajados</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.Extensions)</span><span class="tile__l">cartas colocadas</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.ExtensionsOnOthers)</span><span class="tile__l">en juegos ajenos</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.TookDiscard)</span><span class="tile__l">cartas del pozo</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.TriosLaid)</span><span class="tile__l">tríos bajados</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.EscalerasLaid)</span><span class="tile__l">escaleras bajadas</span></div>
+            <div class="tile"><span class="tile__n">@L(Stat.FullHandRounds)</span><span class="tile__l">rondas sin bajarte</span></div>
+            <div class="tile"><span class="tile__n">@Hours(L(Stat.MinutesPlayed))</span><span class="tile__l">jugando</span></div>
+        </div>
+
+        <div class="section-title">Récords</div>
+
+        <div class="records">
+            <div class="record"><span>🏗️ Escalera más larga</span><strong>@L(Stat.LongestEscalera) cartas</strong></div>
+            <div class="record"><span>🔥 Más rondas cerradas en una partida</span><strong>@L(Stat.MaxClosesInGame)</strong></div>
+            <div class="record"><span>🦝 Más robos de contra en una partida</span><strong>@L(Stat.MaxStealsInGame)</strong></div>
+            <div class="record"><span>🌟 Más canjes en una partida</span><strong>@L(Stat.MaxSwapsInGame)</strong></div>
+            <div class="record"><span>☕ Más partidas en un día</span><strong>@L(Stat.MaxGamesInDay)</strong></div>
+            <div class="record"><span>🧊 Peor racha de derrotas</span><strong>@L(Stat.BestLossStreak)</strong></div>
+            <div class="record"><span>🎖️ Logros conseguidos</span><strong>@P.Achievements.Count / @MissionCatalog.Lifetime.Count()</strong></div>
+            <div class="record"><span>☀️ Misiones diarias cumplidas</span><strong>@L(Stat.DailiesCompleted)</strong></div>
+        </div>
+
+        @if (Rivals.Count > 0)
+        {
+            <div class="section-title">Rivales</div>
+
+            @if (Nemesis is { } nemesis || Victim is not null)
+            {
+                <div class="duo">
+                    @if (Nemesis is { } n)
+                    {
+                        <div class="duo__card duo__card--bad">
+                            <span class="duo__label">😈 Tu némesis</span>
+                            <span class="duo__name">@n.Name</span>
+                            <span class="duo__meta">te gana @n.Behind de @n.Games</span>
+                        </div>
+                    }
+                    @if (Victim is { } v)
+                    {
+                        <div class="duo__card duo__card--good">
+                            <span class="duo__label">😎 Tu víctima favorita</span>
+                            <span class="duo__name">@v.Name</span>
+                            <span class="duo__meta">le ganas @v.Ahead de @v.Games</span>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="rivals">
+                @foreach (var rival in Rivals.Take(10))
+                {
+                    <div class="rival" title="@rival.Name: por delante en @rival.Ahead, por detrás en @rival.Behind de @rival.Games partidas">
+                        <span class="rival__name">
+                            @rival.Name
+                            <span class="tag">@(rival.IsBot ? "bot" : "persona")</span>
+                        </span>
+                        <span class="rival__split">
+                            <span class="rival__ahead" style="flex:@Math.Max(rival.Ahead, 0)"></span>
+                            <span class="rival__behind" style="flex:@Math.Max(rival.Behind, 0)"></span>
+                        </span>
+                        <span class="rival__score">@rival.Ahead–@rival.Behind</span>
+                    </div>
+                }
+            </div>
+            <p class="stats__note"><span class="dot dot--win"></span> partidas en que acabaste por delante · <span class="dot"></span> por detrás</p>
+        }
+
+        <div class="section-title">Últimas partidas</div>
+
+        <div class="history">
+            @foreach (var game in P.History.Take(12))
+            {
+                <div class="hist @(game.Won ? "hist--won" : "")">
+                    <span class="hist__pos">@Medal(game)</span>
+                    <span class="hist__main">
+                        <span class="hist__score">@game.Score pts</span>
+                        <span class="hist__meta">@Fmt(game.At) · @game.Players jugadores · @game.Closed 🚪 · @(game.Preset == RulePreset.Spain ? "🇪🇸" : "🌎")</span>
+                    </span>
+                    <span class="hist__xp">+@game.Xp XP</span>
+                </div>
+            }
+        </div>
+    }
+</ProfileShell>
+
+@code {
+    private const double SparkW = 320;
+    private const double SparkH = 110;
+
+    private PlayerProfile P => Progress.Profile;
+
+    private int L(Stat stat) => P.Lifetime.Get(stat);
+
+    private int Games => L(Stat.GamesPlayed);
+
+    private int Won => L(Stat.GamesWon);
+
+    private int Lost => L(Stat.GamesLost);
+
+    private int WinRate => Games == 0 ? 0 : (int)Math.Round(100.0 * Won / Games);
+
+    private string StreakText => P.WinStreak > 0
+        ? P.WinStreak == 1 ? "1 victoria" : $"{P.WinStreak} victorias"
+        : P.LossStreak > 0
+            ? P.LossStreak == 1 ? "1 derrota" : $"{P.LossStreak} derrotas"
+            : "—";
+
+    private List<HistoryEntry> Recent => P.History.Take(20).Reverse().ToList();
+
+    private int SparkMax => Math.Max(10, Recent.Count == 0 ? 10 : Recent.Max(g => g.Score));
+
+    private int SparkMin => Math.Min(0, Recent.Count == 0 ? 0 : Recent.Min(g => g.Score));
+
+    private string X(int i)
+        => (Recent.Count <= 1 ? SparkW / 2 : 10 + i * (SparkW - 20) / (Recent.Count - 1)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string Y(int score)
+    {
+        var span = Math.Max(1, SparkMax - SparkMin);
+        var y = 8 + (SparkH - 16) * (1 - (double)(score - SparkMin) / span);
+        return y.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private string SparkPoints => string.Join(" ", Recent.Select((g, i) => $"{X(i)},{Y(g.Score)}"));
+
+    private static string Describe(HistoryEntry game)
+        => $"{game.At.ToLocalTime():dd/MM HH:mm} · {game.Score} pts · {(game.Won ? "ganada" : $"puesto {game.Position} de {game.Players}")}";
+
+    private static string Fmt(DateTimeOffset at)
+    {
+        var local = at.ToLocalTime();
+        var days = (DateTime.Now.Date - local.Date).Days;
+
+        return days switch
+        {
+            0 => $"hoy {local:HH:mm}",
+            1 => $"ayer {local:HH:mm}",
+            < 7 => $"hace {days} días",
+            _ => local.ToString("dd/MM/yy")
+        };
+    }
+
+    private static string Avg(int total, int count) => count == 0 ? "—" : Math.Round((double)total / count).ToString("0");
+
+    private static string Pct(int part, int whole) => whole == 0 ? "—" : $"{Math.Round(100.0 * part / whole):0}%";
+
+    private static string Hours(int minutes) => minutes < 60 ? $"{minutes} min" : $"{minutes / 60} h {minutes % 60:00}";
+
+    private double? ContractAvg(int r)
+        => r < P.ContractRounds.Count && P.ContractRounds[r] > 0 ? (double)P.ContractPoints[r] / P.ContractRounds[r] : null;
+
+    private double ContractMax => Enumerable.Range(0, RoundContract.Standard.Count).Select(ContractAvg).Max() ?? 1;
+
+    private string BarWidth(double? avg)
+    {
+        if (avg is not { } a || ContractMax <= 0)
+            return "0%";
+
+        var pct = Math.Clamp(a / ContractMax * 100, a > 0 ? 3 : 0, 100);
+        return $"{pct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%";
+    }
+
+    private int BestContract => RankedContracts.FirstOrDefault(-1);
+
+    private int WorstContract => RankedContracts.LastOrDefault(-1);
+
+    private List<int> RankedContracts => Enumerable.Range(0, RoundContract.Standard.Count)
+        .Where(r => ContractAvg(r) is not null && P.ContractRounds[r] >= 2)
+        .OrderBy(r => ContractAvg(r))
+        .ToList();
+
+    private List<RivalRecord> Rivals => P.Rivals.Values.OrderByDescending(r => r.Games).ThenBy(r => r.Name).ToList();
+
+    private RivalRecord? Nemesis => Rivals.Where(r => r.Games >= 2 && r.Behind > r.Ahead)
+                                          .OrderByDescending(r => r.Behind - r.Ahead).ThenByDescending(r => r.Games).FirstOrDefault();
+
+    private RivalRecord? Victim => Rivals.Where(r => r.Games >= 2 && r.Ahead > r.Behind)
+                                         .OrderByDescending(r => r.Ahead - r.Behind).ThenByDescending(r => r.Games).FirstOrDefault();
+
+    private static string Medal(HistoryEntry game) => game.Position switch
+    {
+        1 => "🥇",
+        2 => "🥈",
+        3 => "🥉",
+        _ => $"{game.Position}º"
+    };
+}

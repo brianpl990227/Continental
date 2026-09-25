@@ -147,6 +147,9 @@ public sealed class GameRoom : IDisposable
             case MessageType.Chat:
                 return _engine.Chat(playerId, m.Text ?? "");
 
+            case MessageType.Badge:
+                return _engine.SetBadge(playerId, m.Badge);
+
             default:
                 return ActionResult.Fail($"Comando desconocido: {m.Type}");
         }

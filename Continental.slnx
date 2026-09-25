@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="Continental/Continental.csproj" />
     <Project Path="Continental.Core/Continental.Core.csproj" />
+    <Project Path="Continental.Launcher/Continental.Launcher.csproj" />
     <Project Path="Continental.Server/Continental.Server.csproj" />
     <Project Path="Continental.Shared/Continental.Shared.csproj" />
     <Project Path="Continental.WebClient/Continental.WebClient.csproj" />

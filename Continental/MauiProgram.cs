@@ -22,6 +22,8 @@ namespace Continental
             builder.Services.AddSingleton<IGameHost, MauiGameHost>();
             builder.Services.AddSingleton<IRoomDiscovery, UdpRoomDiscovery>();
             builder.Services.AddSingleton<IGameJoiner, WebSocketJoiner>();
+            builder.Services.AddSingleton<IProfileStorage, FileProfileStorage>();
+            builder.Services.AddScoped<ProgressService>();
             builder.Services.AddScoped<AppState>();
             builder.Services.AddScoped<GameAudio>();
             builder.Services.AddScoped<CardFlight>();

@@ -16,7 +16,8 @@ public sealed record PlayerSummary(
     bool HasLaidDown,
     bool IsCurrent,
     int TotalScore,
-    IReadOnlyList<int> RoundScores);
+    IReadOnlyList<int> RoundScores,
+    PlayerBadge? Badge = null);
 
 public sealed record MeldView(
     string Id,
@@ -40,6 +41,10 @@ public sealed record PlayerView
     public required GamePhase Phase { get; init; }
 
     public int RoundIndex { get; init; }
+
+    public int GameNumber { get; init; }
+
+    public MatchTally? Tally { get; init; }
 
     public int TotalRounds { get; init; }
 
@@ -108,13 +113,15 @@ public sealed record PlayerView
             Options = state.Options,
             Phase = state.Phase,
             RoundIndex = state.RoundIndex,
+            GameNumber = state.GameNumber,
+            Tally = me?.Tally.Snapshot(),
             TotalRounds = state.TotalRounds,
             ContractCode = state.Contract.Code,
             ContractText = state.Contract.Describe(),
             Hand = me?.Hand.ToList() ?? [],
             Players = state.Players.Select(p => new PlayerSummary(
                 p.Id, p.Name, p.Seat, p.Hand.Count, p.IsBot, p.IsHost, p.IsConnected,
-                p.HasLaidDown, current?.Id == p.Id, p.TotalScore, p.RoundScores.ToList())).ToList(),
+                p.HasLaidDown, current?.Id == p.Id, p.TotalScore, p.RoundScores.ToList(), p.Badge)).ToList(),
             Table = state.Table.Select(m => new MeldView(
                 m.Id, m.OwnerId, state.Find(m.OwnerId)?.Name ?? "?", m.Kind, m.Cards.ToList())).ToList(),
             DiscardTop = state.DiscardTop,

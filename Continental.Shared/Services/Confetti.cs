@@ -23,12 +23,20 @@ public sealed class Confetti(IJSRuntime js) : IAsyncDisposable
         }
     }
 
-    public void Burst(int count = 110)
+    public void Burst(int count = 110, string? style = null)
     {
         if (_module is null)
             return;
 
-        _ = CallAsync("burst", count);
+        _ = style is null ? CallAsync("burst", count) : CallAsync("burst", count, style);
+    }
+
+    public void Sparkle(double x, double y, int count, string tone = "gold")
+    {
+        if (_module is null)
+            return;
+
+        _ = CallAsync("sparkle", x, y, count, tone);
     }
 
     public void Clear()

@@ -1,0 +1,269 @@
+@page "/missions"
+@inject ProgressService Progress
+
+<ProfileShell Tab="missions" Heading="Misiones">
+    <div class="seg" role="tablist">
+        @foreach (var (id, label) in Sections)
+        {
+            <button class="seg__btn @(Section == id ? "seg__btn--on" : "")" role="tab" aria-selected="@(Section == id)"
+                    @onclick="@(() => Section = id)">
+                @label
+                @if (id == "daily" && DailyLeft > 0)
+                {
+                    <span class="seg__count">@DailyLeft</span>
+                }
+            </button>
+        }
+    </div>
+
+    @switch (Section)
+    {
+        case "daily":
+            <div class="period">
+                <span>🕛 Nuevas en @Until(TomorrowAt)</span>
+                <span>@P.Daily.Completed.Count/3 hechas</span>
+            </div>
+
+            @foreach (var mission in Daily)
+            {
+                <MissionCard Mission="mission" Progress="ProgressOf(mission)" Done="Done(mission)"
+                             CanReroll="CanReroll(mission)" OnReroll="@(() => Reroll(mission))" />
+            }
+
+            <div class="bonus @(P.Daily.BonusClaimed ? "bonus--done" : "")">
+                <span class="bonus__icon">🌞</span>
+                <span class="bonus__text">
+                    <strong>Día redondo</strong>
+                    <span>Completa las tres diarias y gana un extra.</span>
+                </span>
+                <span class="bonus__xp">@(P.Daily.BonusClaimed ? "✓" : $"+{MissionCatalog.DailyBonusXp} XP")</span>
+            </div>
+
+            @if (P.Daily.Rerolls < MissionCatalog.DailyRerolls)
+            {
+                <p class="stats__note">Puedes cambiar una misión diaria al día si no te convence (↻).</p>
+            }
+            break;
+
+        case "weekly":
+            <div class="period">
+                <span>🗓️ Nuevas en @Until(NextMondayAt)</span>
+                <span>@P.Weekly.Completed.Count/3 hechas</span>
+            </div>
+
+            @foreach (var mission in Weekly)
+            {
+                <MissionCard Mission="mission" Progress="ProgressOf(mission)" Done="Done(mission)" />
+            }
+            break;
+
+        case "achievements":
+            <div class="period">
+                <span>🎖️ @AchievementsDone de @MissionCatalog.Achievements.Count logros</span>
+                <span>@Percent(AchievementsDone, MissionCatalog.Achievements.Count)</span>
+            </div>
+
+            <div class="chips">
+                @foreach (var (id, label) in Filters)
+                {
+                    <button class="chip @(Filter == id ? "chip--on" : "")" @onclick="@(() => Filter = id)">@label</button>
+                }
+            </div>
+
+            @foreach (var group in Families.GroupBy(f => f.Tiers[0].Group))
+            {
+                var visible = group.Where(Matches).ToList();
+
+                if (visible.Count == 0)
+                    continue;
+
+                <div class="section-title">@group.Key <span class="section-title__hint">@group.Sum(f => f.Done)/@group.Sum(f => f.Tiers.Count)</span></div>
+
+                @foreach (var family in visible)
+                {
+                    var next = family.Next;
+                    var shown = next ?? family.Tiers[^1];
+                    var expanded = Expanded.Contains(family.Key);
+
+                    <div class="family @(next is null ? "family--done" : "")">
+                        <button class="family__head" @onclick="@(() => Toggle(family.Key))" aria-expanded="@expanded">
+                            <span class="family__icon">@shown.Icon</span>
+                            <span class="family__main">
+                                <span class="family__title">@shown.Title</span>
+                                <span class="family__detail">@shown.Detail</span>
+                                @if (next is not null)
+                                {
+                                    var value = Math.Min(P.Lifetime.Get(next.Stat), next.Target);
+                                    <span class="bar"><span class="bar__fill" style="width:@Percent(value, next.Target)"></span></span>
+                                    <span class="family__meta">@Compact(value) / @Compact(next.Target) · +@next.Xp XP</span>
+                                }
+                                else
+                                {
+                                    <span class="family__meta family__meta--done">✓ Completo</span>
+                                }
+                            </span>
+                            <span class="pips" aria-label="@family.Done de @family.Tiers.Count">
+                                @foreach (var tier in family.Tiers)
+                                {
+                                    <i class="@(P.HasCompleted(tier.Id) ? "pip-on" : "")"></i>
+                                }
+                            </span>
+                        </button>
+
+                        @if (expanded)
+                        {
+                            <div class="tiers">
+                                @foreach (var tier in family.Tiers)
+                                {
+                                    var reward = RewardOf(tier);
+                                    <div class="tier @(P.HasCompleted(tier.Id) ? "tier--done" : "")">
+                                        <span class="tier__check">@(P.HasCompleted(tier.Id) ? "✓" : "·")</span>
+                                        <span class="tier__text">
+                                            <span>@tier.Title</span>
+                                            <span class="tier__detail">@tier.Detail</span>
+                                            @if (reward is not null)
+                                            {
+                                                <span class="tier__reward">🎁 @reward.Name (@Cosmetics.KindSingular(reward.Kind).ToLowerInvariant())</span>
+                                            }
+                                        </span>
+                                        <span class="tier__xp">+@tier.Xp</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            break;
+
+        case "secrets":
+            <div class="period">
+                <span>🔮 @SecretsDone de @MissionCatalog.Secrets.Count secretos</span>
+                <span>se revelan al conseguirlos</span>
+            </div>
+
+            <div class="secrets">
+                @foreach (var secret in MissionCatalog.Secrets.OrderByDescending(s => P.HasCompleted(s.Id)))
+                {
+                    var done = P.HasCompleted(secret.Id);
+                    var reward = RewardOf(secret);
+
+                    <div class="secret @(done ? "secret--done" : "")">
+                        <span class="secret__icon">@(done ? secret.Icon : "❔")</span>
+                        <span class="secret__main">
+                            <span class="secret__title">@(done ? secret.Title : "Secreto")</span>
+                            <span class="secret__detail">@(done ? secret.Detail : "Sigue jugando para descubrirlo.")</span>
+                            @if (done && reward is not null)
+                            {
+                                <span class="tier__reward">🎁 @reward.Name</span>
+                            }
+                        </span>
+                        <span class="secret__xp">@(done ? $"+{secret.Xp}" : "???")</span>
+                    </div>
+                }
+            </div>
+            break;
+    }
+</ProfileShell>
+
+@code {
+    private string Section = "daily";
+    private string Filter = "near";
+    private readonly HashSet<string> Expanded = [];
+
+    private static readonly (string Id, string Label)[] Sections =
+    [
+        ("daily", "Diarias"), ("weekly", "Semanales"), ("achievements", "Logros"), ("secrets", "Secretas")
+    ];
+
+    private static readonly (string Id, string Label)[] Filters =
+    [
+        ("near", "Más cerca"), ("all", "Todos"), ("open", "Pendientes"), ("done", "Completos")
+    ];
+
+    private PlayerProfile P => Progress.Profile;
+
+    private sealed record Family(string Key, List<Mission> Tiers, int Done, Mission? Next, double Closeness);
+
+    private List<Mission> Daily => P.Daily.Missions.Select(MissionCatalog.Find).OfType<Mission>().ToList();
+
+    private List<Mission> Weekly => P.Weekly.Missions.Select(MissionCatalog.Find).OfType<Mission>().ToList();
+
+    private int DailyLeft => P.Daily.Missions.Count(id => !P.Daily.Completed.Contains(id));
+
+    private int AchievementsDone => MissionCatalog.Achievements.Count(m => P.HasCompleted(m.Id));
+
+    private int SecretsDone => MissionCatalog.Secrets.Count(m => P.HasCompleted(m.Id));
+
+    private IEnumerable<Family> Families
+    {
+        get
+        {
+            var families = MissionCatalog.Achievements
+                .GroupBy(m => m.Id[..m.Id.LastIndexOf('.')])
+                .Select(g =>
+                {
+                    var tiers = g.OrderBy(m => m.Tier).ToList();
+                    var next = tiers.FirstOrDefault(t => !P.HasCompleted(t.Id));
+                    var closeness = next is null ? -1 : (double)P.Lifetime.Get(next.Stat) / next.Target;
+                    return new Family(g.Key, tiers, tiers.Count(t => P.HasCompleted(t.Id)), next, closeness);
+                });
+
+            return Filter == "near"
+                ? families.OrderByDescending(f => f.Closeness)
+                : families;
+        }
+    }
+
+    private bool Matches(Family family) => Filter switch
+    {
+        "done" => family.Done > 0,
+        "open" => family.Next is not null,
+        "near" => family.Next is not null,
+        _ => true
+    };
+
+    private int ProgressOf(Mission mission) => ProgressEngine.ProgressOf(P, mission);
+
+    private bool Done(Mission mission) => ProgressEngine.IsDone(P, mission);
+
+    private bool CanReroll(Mission mission)
+        => P.Daily.Rerolls < MissionCatalog.DailyRerolls && !Done(mission);
+
+    private async Task Reroll(Mission mission) => await Progress.RerollAsync(mission.Id);
+
+    private void Toggle(string key)
+    {
+        if (!Expanded.Remove(key))
+            Expanded.Add(key);
+    }
+
+    private static Cosmetic? RewardOf(Mission mission) => Cosmetics.All.FirstOrDefault(c => c.Mission == mission.Id);
+
+    private static string Percent(int value, int total)
+        => total <= 0 ? "0%" : $"{Math.Clamp(100.0 * value / total, 0, 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%";
+
+    private static string Compact(int n) => n >= 10000 ? $"{n / 1000}k" : n.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("es-ES"));
+
+    private static DateTime TomorrowAt => DateTime.Today.AddDays(1);
+
+    private static DateTime NextMondayAt
+    {
+        get
+        {
+            var today = DateTime.Today;
+            var days = ((int)DayOfWeek.Monday - (int)today.DayOfWeek + 7) % 7;
+            return today.AddDays(days == 0 ? 7 : days);
+        }
+    }
+
+    private static string Until(DateTime at)
+    {
+        var left = at - DateTime.Now;
+
+        if (left.TotalHours >= 24)
+            return $"{(int)left.TotalDays} d {left.Hours} h";
+
+        return left.TotalHours >= 1 ? $"{(int)left.TotalHours} h {left.Minutes} min" : $"{Math.Max(1, left.Minutes)} min";
+    }
+}

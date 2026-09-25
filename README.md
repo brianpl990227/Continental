@@ -72,8 +72,27 @@ Deja en `dist\`:
 | Fichero | Qué es |
 |---|---|
 | `Continental.apk` | ~25 MB, `arm64-v8a`, minSdk 24 (Android 7). Firmado para instalar fuera de Play. |
+| `Continental.exe` | **Lo que se publica.** Un solo fichero (~97 MB) que lleva dentro la app de Windows. |
 | `Continental-Windows\` | Carpeta autocontenida (~244 MB). `Continental.exe` arranca sin instalar .NET ni el Windows App SDK. |
-| `Continental-Windows.zip` | Lo mismo comprimido (~93 MB), para copiar a otro equipo. |
+| `Continental-Windows.zip` | Esa carpeta comprimida (~95 MB). Es lo que va dentro del ejecutable único. |
+
+### Por qué Windows lleva un lanzador
+
+WinUI, sobre el que corre MAUI en Windows, **no admite la publicación en un solo fichero**: el
+ejecutable arranca y muere con `ClassFactory no puede suministrar a la clase solicitada`, porque
+sus componentes tienen que estar sueltos junto al `.exe`. Así que `Continental.exe` es en realidad
+`Continental.Launcher`: un ejecutable NativeAOT de ~2 MB con el zip pegado al final. Al abrirlo:
+
+1. Lee al final del propio fichero el zip, su huella y su tamaño.
+2. Si `%LOCALAPPDATA%\Continental\app-<huella>` no existe, lo descomprime ahí (~2 s la primera vez).
+3. Borra las carpetas `app-*` de versiones anteriores y arranca la app.
+
+Los datos del navegador interno (el nombre, el silencio) viven en
+`%LOCALAPPDATA%\Continental\WebView2`, fuera de la carpeta de la versión, para que una
+actualización no los borre. El progreso (`profile.json`) ya vive en la carpeta de datos de la app.
+
+NativeAOT necesita las herramientas de C++ de Visual Studio. Si faltan, el script cae a un
+lanzador .NET de un solo fichero, más grande pero equivalente.
 
 ### La clave de firma
 

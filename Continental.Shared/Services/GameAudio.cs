@@ -23,6 +23,12 @@ public static class Sfx
     public const string Tap = "tap";
     public const string Chat = "chat";
     public const string Swap = "swap";
+    public const string Mission = "mission";
+    public const string LevelUp = "levelup";
+    public const string Unlock = "unlock";
+    public const string Start = "start";
+    public const string Victory = "victory";
+    public const string Defeat = "defeat";
 }
 
 public sealed class GameAudio(IJSRuntime js) : IAsyncDisposable

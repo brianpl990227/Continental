@@ -1,0 +1,155 @@
+@page "/collection"
+@inject ProgressService Progress
+@inject AppState App
+
+<ProfileShell Tab="collection" Heading="Colección">
+    <div class="period">
+        <span>🎨 @Owned de @Cosmetics.All.Count premios</span>
+        @if (Cosmetics.NextUnlock(Progress.Profile.Level) is { } next)
+        {
+            <span>Nivel @next.Level: @next.Name</span>
+        }
+    </div>
+
+    <div class="chips chips--scroll">
+        @foreach (var kind in Kinds)
+        {
+            var fresh = Cosmetics.OfKind(kind).Count(Progress.IsNew);
+            <button class="chip @(Kind == kind ? "chip--on" : "")" @onclick="@(() => Show(kind))">
+                @Cosmetics.KindName(kind)
+                <span class="chip__count">@Cosmetics.OfKind(kind).Count(Progress.Profile.Owns)/@Cosmetics.OfKind(kind).Count()</span>
+                @if (fresh > 0)
+                {
+                    <span class="chip__new">@fresh</span>
+                }
+            </button>
+        }
+    </div>
+
+    <p class="stats__note">@Explain(Kind)</p>
+
+    <div class="grid grid--@Kind.ToString().ToLowerInvariant()">
+        @foreach (var item in Items)
+        {
+            var owned = Progress.Profile.Owns(item);
+            var worn = Cosmetics.IsEquippable(item.Kind) && Progress.Profile.Current(item.Kind).Id == item.Id;
+            var isNew = SeenNow.Contains(item.Id);
+
+            <button class="item @(owned ? "" : "item--locked") @(worn ? "item--worn" : "")"
+                    @onclick="@(() => Pick(item))"
+                    aria-pressed="@(worn ? "true" : "false")"
+                    aria-label="@(owned ? item.Name : $"{item.Name}, bloqueado: {Requirement(item)}")">
+                <CosmeticSwatch Item="item" Initial="@Initial" />
+                <span class="item__name">@item.Name</span>
+                <span class="item__req">
+                    @if (worn)
+                    {
+                        <span>✓ En uso</span>
+                    }
+                    else if (owned)
+                    {
+                        <span>@(Cosmetics.IsEquippable(item.Kind) ? "Usar" : "Desbloqueado")</span>
+                    }
+                    else
+                    {
+                        <span>🔒 @Requirement(item)</span>
+                    }
+                </span>
+                @if (isNew)
+                {
+                    <span class="item__new">NUEVO</span>
+                }
+            </button>
+        }
+    </div>
+
+    @if (Hint is not null)
+    {
+        <div class="toast" style="position:fixed" @onclick="@(() => Hint = null)">@Hint</div>
+    }
+</ProfileShell>
+
+@code {
+    private CosmeticKind Kind = CosmeticKind.Avatar;
+    private string? Hint;
+    private HashSet<string> SeenNow = [];
+
+    private static readonly CosmeticKind[] Kinds =
+    [
+        CosmeticKind.Avatar, CosmeticKind.Title, CosmeticKind.CardBack, CosmeticKind.Felt,
+        CosmeticKind.Victory, CosmeticKind.Trail, CosmeticKind.Sound, CosmeticKind.Phrases
+    ];
+
+    private int Owned => Cosmetics.All.Count(Progress.Profile.Owns);
+
+    private string Initial => string.IsNullOrWhiteSpace(App.PlayerName) ? "?" : App.PlayerName.Trim()[..1].ToUpperInvariant();
+
+    private IEnumerable<Cosmetic> Items => Cosmetics.OfKind(Kind)
+        .OrderByDescending(Progress.Profile.Owns)
+        .ThenBy(c => c.Mission is null ? 0 : 1)
+        .ThenBy(c => c.Level);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Progress.LoadAsync();
+            await MarkSeen();
+        }
+    }
+
+    private async Task Show(CosmeticKind kind)
+    {
+        Kind = kind;
+        Hint = null;
+        await MarkSeen();
+    }
+
+    private async Task MarkSeen()
+    {
+        var items = Cosmetics.OfKind(Kind).ToList();
+        SeenNow = items.Where(Progress.IsNew).Select(c => c.Id).ToHashSet();
+        await Progress.MarkSeenAsync(items);
+        StateHasChanged();
+    }
+
+    private async Task Pick(Cosmetic item)
+    {
+        if (!Progress.Profile.Owns(item))
+        {
+            Hint = $"🔒 {item.Name}: {Requirement(item)}";
+            return;
+        }
+
+        Hint = null;
+
+        if (item.Kind is CosmeticKind.Victory or CosmeticKind.Sound)
+            await Progress.PreviewAsync(item);
+
+        if (Cosmetics.IsEquippable(item.Kind))
+            await Progress.EquipAsync(item);
+        else
+            Hint = string.Join(" · ", item.Value.Split('|'));
+    }
+
+    private static string Requirement(Cosmetic item)
+    {
+        if (item.Mission is { } id && MissionCatalog.Find(id) is { } mission)
+            return mission.Scope == MissionScope.Secret ? "misión secreta" : mission.Title;
+
+        return $"nivel {item.Level}";
+    }
+
+    private static string Explain(CosmeticKind kind) => kind switch
+    {
+        CosmeticKind.Avatar => "Tu avatar sale junto a tu nombre en la mesa de todos los jugadores.",
+        CosmeticKind.Title => "Tu título se ve debajo de tu nombre en el vestíbulo y en la mesa.",
+        CosmeticKind.CardBack => "El dorso de las cartas del mazo y de las que vuelan por la mesa.",
+        CosmeticKind.Felt => "El color del tapete y de la sala.",
+        CosmeticKind.Victory => "Lo que cae del cielo cuando ganas. Tócalo para verlo.",
+        CosmeticKind.Trail => "El brillo que dejan tus cartas al volar.",
+        CosmeticKind.Sound => "El timbre de los sonidos del juego. Tócalo para oírlo.",
+        CosmeticKind.Phrases => "Frases rápidas extra en el chat. Todas las que desbloquees quedan activas.",
+        _ => ""
+    };
+}

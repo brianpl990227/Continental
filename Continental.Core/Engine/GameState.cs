@@ -40,6 +40,89 @@ public sealed class PlayerState
     public int TotalScore { get; set; }
 
     public List<int> RoundScores { get; init; } = [];
+
+    public PlayerBadge? Badge { get; set; }
+
+    public MatchTally Tally { get; set; } = new();
+
+    public int TurnsThisRound { get; set; }
+
+    public int SwapsThisRound { get; set; }
+}
+
+public sealed record PlayerBadge(int Level, string? Avatar, string? Title)
+{
+    public const int MaxAvatarLength = 16;
+    public const int MaxTitleLength = 40;
+
+    public static PlayerBadge? Sanitize(PlayerBadge? badge)
+    {
+        if (badge is null)
+            return null;
+
+        var avatar = badge.Avatar?.Trim();
+        var title = badge.Title?.Trim();
+
+        return new PlayerBadge(
+            Math.Clamp(badge.Level, 1, 999),
+            string.IsNullOrEmpty(avatar) || avatar.Length > MaxAvatarLength ? null : avatar,
+            string.IsNullOrEmpty(title) ? null : title.Length > MaxTitleLength ? title[..MaxTitleLength] : title);
+    }
+}
+
+public sealed class MatchTally
+{
+    public int Turns { get; set; }
+
+    public int Steals { get; set; }
+
+    public int JokerSwaps { get; set; }
+
+    public int MaxSwapsInRound { get; set; }
+
+    public int Extensions { get; set; }
+
+    public int ExtensionsOnOthers { get; set; }
+
+    public int TookDiscard { get; set; }
+
+    public int JokersLaid { get; set; }
+
+    public int TriosLaid { get; set; }
+
+    public int EscalerasLaid { get; set; }
+
+    public int LongestEscalera { get; set; }
+
+    public int ChatMessages { get; set; }
+
+    public List<int> ClosedRounds { get; set; } = [];
+
+    public List<int> LaidDownRounds { get; set; } = [];
+
+    public List<int> SameTurnCloseRounds { get; set; } = [];
+
+    public List<int> FirstTurnCloseRounds { get; set; } = [];
+
+    public MatchTally Snapshot() => new()
+    {
+        Turns = Turns,
+        Steals = Steals,
+        JokerSwaps = JokerSwaps,
+        MaxSwapsInRound = MaxSwapsInRound,
+        Extensions = Extensions,
+        ExtensionsOnOthers = ExtensionsOnOthers,
+        TookDiscard = TookDiscard,
+        JokersLaid = JokersLaid,
+        TriosLaid = TriosLaid,
+        EscalerasLaid = EscalerasLaid,
+        LongestEscalera = LongestEscalera,
+        ChatMessages = ChatMessages,
+        ClosedRounds = [.. ClosedRounds],
+        LaidDownRounds = [.. LaidDownRounds],
+        SameTurnCloseRounds = [.. SameTurnCloseRounds],
+        FirstTurnCloseRounds = [.. FirstTurnCloseRounds]
+    };
 }
 
 public enum MoveKind
@@ -95,6 +178,8 @@ public sealed class GameState
     public GamePhase Phase { get; set; } = GamePhase.Lobby;
 
     public int RoundIndex { get; set; }
+
+    public int GameNumber { get; set; }
 
     public List<PlayerState> Players { get; init; } = [];
 

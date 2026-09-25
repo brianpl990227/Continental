@@ -1,0 +1,77 @@
+<div class="swatch swatch--@Item.Kind.ToString().ToLowerInvariant() @(Small ? "swatch--sm" : "") @Look" aria-hidden="true">
+    @switch (Item.Kind)
+    {
+        case CosmeticKind.CardBack:
+            <CardView Card="Hidden" FaceDown="true" />
+            break;
+
+        case CosmeticKind.Felt:
+            <span class="swatch__felt"></span>
+            break;
+
+        case CosmeticKind.Avatar:
+            <span class="swatch__avatar">@(string.IsNullOrEmpty(Item.Value) ? Initial : Item.Value)</span>
+            break;
+
+        case CosmeticKind.Title:
+            <span class="swatch__title">@(Item.Id == "title.sin-titulo" ? "—" : Item.Value)</span>
+            break;
+
+        case CosmeticKind.Victory:
+            <span class="swatch__icon">@VictoryIcon</span>
+            break;
+
+        case CosmeticKind.Sound:
+            <span class="swatch__icon">@SoundIcon</span>
+            break;
+
+        case CosmeticKind.Trail:
+            <span class="swatch__trail"><CardView Card="Ace" /></span>
+            break;
+
+        case CosmeticKind.Phrases:
+            <span class="swatch__bubble">@Item.Value.Split('|')[0]</span>
+            break;
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Cosmetic Item { get; set; } = default!;
+
+    [Parameter] public bool Small { get; set; }
+
+    [Parameter] public string Initial { get; set; } = "A";
+
+    private static readonly Card Hidden = new(-7, Suit.Spades, Rank.Two);
+
+    private static readonly Card Ace = new(-8, Suit.Hearts, Rank.Ace);
+
+    private string Look => Item.Kind switch
+    {
+        CosmeticKind.CardBack => $"back--{Item.Value}",
+        CosmeticKind.Felt => $"felt--{Item.Value}",
+        CosmeticKind.Trail => $"trail--{Item.Value}",
+        _ => ""
+    };
+
+    private string VictoryIcon => Item.Value switch
+    {
+        "palos" => "♠♥",
+        "estrellas" => "★",
+        "monedas" => "🪙",
+        "comodines" => "🃏",
+        "fuegos" => "🎆",
+        "oro" => "✨",
+        "arcoiris" => "🌈",
+        _ => "🎉"
+    };
+
+    private string SoundIcon => Item.Value switch
+    {
+        "suave" => "🎐",
+        "retro" => "👾",
+        "casino" => "🎰",
+        "cristal" => "🔔",
+        _ => "🎵"
+    };
+}

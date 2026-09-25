@@ -6,6 +6,7 @@
 @inject IGameJoiner Joiner
 @inject NavigationManager Nav
 @inject UpdateChecker Updates
+@inject ProgressService Progress
 
 <div class="home">
     <div class="home__hero" aria-hidden="true">
@@ -26,6 +27,42 @@
                value="@App.PlayerName"
                @onchange="@(e => SaveName(e.Value?.ToString() ?? ""))" />
     </div>
+
+    @if (Progress.IsSupported)
+    {
+        var level = Progress.Level;
+        var avatar = Progress.Profile.Current(CosmeticKind.Avatar).Value;
+
+        <a class="me rank--@Progress.Rank.Tier" href="stats" aria-label="Tu perfil: nivel @level.Level">
+            <span class="me__avatar">@(string.IsNullOrEmpty(avatar) ? Initial : avatar)</span>
+            <span class="me__main">
+                <span class="me__line">
+                    <span class="me__rank">@Progress.Rank.Name</span>
+                    <span class="me__xp">@level.Into/@level.Needed XP</span>
+                </span>
+                <span class="xpbar xpbar--sm"><span class="xpbar__fill" style="width:@Pct(level.Fraction)"></span></span>
+            </span>
+            <span class="lvl rank--@Progress.Rank.Tier"><span class="lvl__n">@level.Level</span><span class="lvl__cap">nivel</span></span>
+        </a>
+
+        <div class="quick">
+            <a class="quick__btn" href="stats"><span class="quick__icon">📊</span>Estadísticas</a>
+            <a class="quick__btn" href="missions">
+                <span class="quick__icon">🎯</span>Misiones
+                @if (DailyLeft > 0)
+                {
+                    <span class="quick__badge">@DailyLeft</span>
+                }
+            </a>
+            <a class="quick__btn" href="collection">
+                <span class="quick__icon">🎨</span>Colección
+                @if (Progress.NewCount > 0)
+                {
+                    <span class="quick__badge quick__badge--new">@Progress.NewCount</span>
+                }
+            </a>
+        </div>
+    }
 
     @if (Busy is not null)
     {
@@ -139,6 +176,13 @@
 
     private bool HasName => !string.IsNullOrWhiteSpace(App.PlayerName);
 
+    private string Initial => string.IsNullOrWhiteSpace(App.PlayerName) ? "?" : App.PlayerName.Trim()[..1].ToUpperInvariant();
+
+    private int DailyLeft => Progress.Profile.Daily.Missions.Count(id => !Progress.Profile.Daily.Completed.Contains(id));
+
+    private static string Pct(double fraction)
+        => $"{(fraction * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%";
+
     private static readonly Card[] HeroCards =
     [
         new(0, Suit.Spades, Rank.Ace),
@@ -152,11 +196,14 @@
     {
         App.Changed += OnChanged;
         Discovery.Changed += OnChanged;
+        Progress.Changed += OnChanged;
 
         if (!Discovery.IsSupported && Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var baseUri))
             Manual = baseUri.IsDefaultPort ? baseUri.Host : $"{baseUri.Host}:{baseUri.Port}";
 
         await App.LoadAsync();
+        await Progress.LoadAsync();
+        Progress.Refresh();
         await Discovery.StartAsync();
 
         if (Updates.Installable)
@@ -259,6 +306,7 @@
     {
         App.Changed -= OnChanged;
         Discovery.Changed -= OnChanged;
+        Progress.Changed -= OnChanged;
         _ = Discovery.StopAsync();
     }
 }

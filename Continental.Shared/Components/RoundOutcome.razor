@@ -12,6 +12,56 @@
         </div>
     }
 
+    @if (IsGameOver && Summary is { Finished: true } gain)
+    {
+        var level = Leveling.Progress(gain.XpEnd);
+        var from = gain.LevelEnd > gain.LevelStart ? 0 : Leveling.Progress(gain.XpStart).Fraction;
+
+        <div class="gain">
+            <div class="gain__head">
+                <span class="gain__xp">+@gain.Gained <small>XP</small></span>
+                @if (gain.LevelEnd > gain.LevelStart)
+                {
+                    <span class="gain__up">⬆ ¡Nivel @gain.LevelEnd!</span>
+                }
+                else
+                {
+                    <span class="gain__lvl">Nivel @level.Level · @level.Into/@level.Needed</span>
+                }
+            </div>
+            <div class="xpbar xpbar--grow" style="--from:@Pct(from);--to:@Pct(level.Fraction)">
+                <div class="xpbar__fill"></div>
+            </div>
+            <div class="gain__lines">
+                @foreach (var line in gain.GameXpLines)
+                {
+                    <span>@line.Label <b>+@line.Xp</b></span>
+                }
+                @if (gain.Missions.Count > 0)
+                {
+                    <span>@(gain.Missions.Count == 1 ? "1 misión" : $"{gain.Missions.Count} misiones") <b>+@gain.Missions.Sum(m => m.Xp)</b></span>
+                }
+                @if (gain.DailyBonus)
+                {
+                    <span>Día redondo <b>+@MissionCatalog.DailyBonusXp</b></span>
+                }
+            </div>
+            @if (gain.Missions.Count > 0)
+            {
+                <div class="gain__missions">
+                    @foreach (var mission in gain.Missions.Take(4))
+                    {
+                        <span class="gain__mission" title="@mission.Detail">@mission.Icon @mission.Title</span>
+                    }
+                    @if (gain.Missions.Count > 4)
+                    {
+                        <span class="gain__mission gain__mission--more">+@(gain.Missions.Count - 4)</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     <div class="outcome__actions">
         <button class="btn btn--grow" @onclick="OnShowScores">Ver puntuaciones</button>
 
@@ -34,6 +84,11 @@
     [Parameter, EditorRequired] public PlayerView View { get; set; } = default!;
 
     [Parameter] public bool IsGameOver { get; set; }
+
+    [Parameter] public GameSummary? Summary { get; set; }
+
+    private static string Pct(double fraction)
+        => $"{(fraction * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%";
 
     [Parameter] public EventCallback OnShowScores { get; set; }
 

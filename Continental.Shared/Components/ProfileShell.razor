@@ -1,0 +1,96 @@
+@implements IDisposable
+@inject ProgressService Progress
+@inject AppState App
+@inject NavigationManager Nav
+
+<div class="prof">
+    <div class="prof__bar">
+        <button class="btn btn--ghost btn--icon" @onclick="Back" aria-label="Volver al inicio">←</button>
+        <h1 class="prof__heading">@Heading</h1>
+    </div>
+
+    <div class="prof__card rank--@Progress.Rank.Tier">
+        <span class="prof__avatar">@(string.IsNullOrEmpty(Avatar) ? Initial : Avatar)</span>
+        <div class="prof__who">
+            <div class="prof__name">@(string.IsNullOrWhiteSpace(App.PlayerName) ? "Sin nombre" : App.PlayerName)</div>
+            <div class="prof__rank">@Title</div>
+            <div class="xpbar" role="progressbar" aria-valuemin="0" aria-valuemax="@Level.Needed" aria-valuenow="@Level.Into"
+                 aria-label="Experiencia hacia el nivel @(Level.Level + 1)">
+                <div class="xpbar__fill" style="width:@Percent(Level.Fraction)"></div>
+            </div>
+            <div class="prof__xp">@Level.Into / @Level.Needed XP para el nivel @(Level.Level + 1)</div>
+        </div>
+        <div class="lvl lvl--lg rank--@Progress.Rank.Tier" title="Nivel @Level.Level">
+            <span class="lvl__n">@Level.Level</span>
+            <span class="lvl__cap">nivel</span>
+        </div>
+    </div>
+
+    <nav class="prof__tabs" aria-label="Secciones del perfil">
+        <a class="prof__tab @(Tab == "stats" ? "prof__tab--on" : "")" href="stats">📊 Estadísticas</a>
+        <a class="prof__tab @(Tab == "missions" ? "prof__tab--on" : "")" href="missions">
+            🎯 Misiones
+            @if (DailyLeft > 0)
+            {
+                <span class="prof__dot">@DailyLeft</span>
+            }
+        </a>
+        <a class="prof__tab @(Tab == "collection" ? "prof__tab--on" : "")" href="collection">
+            🎨 Colección
+            @if (Progress.NewCount > 0)
+            {
+                <span class="prof__dot prof__dot--new">@Progress.NewCount</span>
+            }
+        </a>
+    </nav>
+
+    <div class="prof__body">
+        @ChildContent
+    </div>
+</div>
+
+<Celebrations />
+
+@code {
+    [Parameter] public string Tab { get; set; } = "stats";
+
+    [Parameter] public string Heading { get; set; } = "Tu perfil";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private LevelProgress Level => Progress.Level;
+
+    private string Avatar => Progress.Profile.Current(CosmeticKind.Avatar).Value;
+
+    private string Title
+    {
+        get
+        {
+            var title = Progress.Profile.Current(CosmeticKind.Title);
+            return title.Id == "title.sin-titulo" ? Progress.Rank.Name : title.Value;
+        }
+    }
+
+    private string Initial => string.IsNullOrWhiteSpace(App.PlayerName) ? "?" : App.PlayerName.Trim()[..1].ToUpperInvariant();
+
+    private int DailyLeft => Progress.Profile.Daily.Missions.Count(id => !Progress.Profile.Daily.Completed.Contains(id));
+
+    private static string Percent(double fraction)
+        => $"{(fraction * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Progress.Changed += OnChanged;
+        await App.LoadAsync();
+        await Progress.LoadAsync();
+
+        if (!Progress.IsSupported)
+            Nav.NavigateTo("/");
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private void Back() => Nav.NavigateTo("/");
+
+    public void Dispose() => Progress.Changed -= OnChanged;
+}

@@ -1,4 +1,23 @@
 <div class="hand">
+    @if (Cards.Count > 0)
+    {
+        <div class="hand__meta">
+            <span class="hand__count" aria-live="polite">
+                <span class="hand__count-n">@Cards.Count</span>
+                @(Cards.Count == 1 ? "carta" : "cartas")
+            </span>
+
+            @if (Selected.Count > 0)
+            {
+                <button class="hand__clear" @onclick="Clear" aria-label="Deseleccionar todas">
+                    <span class="hand__count-n">@Selected.Count</span>
+                    @(Selected.Count == 1 ? "elegida" : "elegidas")
+                    <span class="hand__clear-x" aria-hidden="true">✕</span>
+                </button>
+            }
+        </div>
+    }
+
     <div class="hand__rail" role="group" aria-label="Tu mano, @Cards.Count cartas">
         @for (var i = 0; i < Cards.Count; i++)
         {
@@ -23,7 +42,11 @@
 
     [Parameter] public bool Dealing { get; set; }
 
+    [Parameter] public EventCallback OnClear { get; set; }
+
     private Task Toggle(int cardId) => OnToggle.InvokeAsync(cardId);
+
+    private Task Clear() => OnClear.InvokeAsync();
 
     private string Fan => Cards.Count switch
     {

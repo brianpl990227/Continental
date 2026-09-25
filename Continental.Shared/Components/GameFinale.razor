@@ -1,0 +1,121 @@
+@implements IDisposable
+@inject GameAudio Audio
+@inject Confetti Party
+
+<div class="finale finale--@(Won ? "win" : "lose")" role="dialog" aria-label="@(Won ? "Has ganado la partida" : "Fin de la partida")" @onclick="Skip">
+    @if (Won)
+    {
+        <div class="finale__flash" aria-hidden="true"></div>
+        <div class="finale__rays" aria-hidden="true"></div>
+        <div class="finale__trophy" aria-hidden="true">🏆</div>
+        <div class="finale__kicker">Fin de la partida</div>
+        <div class="finale__title">¡Victoria!</div>
+        <div class="finale__line">@Score puntos · nadie hizo menos</div>
+    }
+    else
+    {
+        <div class="finale__rain" aria-hidden="true">
+            @for (var i = 0; i < 46; i++)
+            {
+                <i style="--x:@((i * 37) % 100)%;--d:@((i * 173) % 1400)ms;--t:@(700 + (i * 97) % 600)ms"></i>
+            }
+        </div>
+        <div class="finale__kicker">Fin de la partida</div>
+        <div class="finale__place">@Position<small>º</small></div>
+        <div class="finale__title">@Verdict</div>
+        <div class="finale__line">Gana @Winner?.Name con @Winner?.TotalScore puntos</div>
+    }
+
+    <div class="finale__podium">
+        @foreach (var (player, index) in Ranked.Take(4).Select((p, i) => (p, i)))
+        {
+            var mine = player.Id == YouId;
+            var place = 1 + Ranked.Count(p => p.TotalScore < player.TotalScore);
+
+            <div class="finale__step finale__step--@place @(mine ? "finale__step--you" : "")" style="--d:@(1500 + index * 180)ms">
+                @if (mine && !Won)
+                {
+                    <span class="finale__cloud" aria-hidden="true">🌧️</span>
+                }
+                @if (place == 1 && !Won)
+                {
+                    <span class="finale__crown" aria-hidden="true">👑</span>
+                }
+                <span class="finale__avatar">@(player.Badge?.Avatar ?? Initial(player.Name))</span>
+                <span class="finale__name">@(mine ? "Tú" : player.Name)</span>
+                <span class="finale__score">@player.TotalScore</span>
+                <span class="finale__block">@place</span>
+            </div>
+        }
+    </div>
+
+    <div class="finale__skip">Toca para continuar</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PlayerSummary> Players { get; set; } = [];
+
+    [Parameter] public string YouId { get; set; } = "";
+
+    [Parameter] public EventCallback OnDone { get; set; }
+
+    public const int Duration = 6200;
+
+    private readonly CancellationTokenSource _cts = new();
+
+    private List<PlayerSummary> Ranked => Players.OrderBy(p => p.TotalScore).ThenBy(p => p.Seat).ToList();
+
+    private PlayerSummary? Me => Players.FirstOrDefault(p => p.Id == YouId);
+
+    private PlayerSummary? Winner => Ranked.FirstOrDefault();
+
+    private int Score => Me?.TotalScore ?? 0;
+
+    private bool Won => Me is not null && Me.TotalScore == Players.Min(p => p.TotalScore);
+
+    private int Position => Me is null ? 0 : 1 + Players.Count(p => p.TotalScore < Me.TotalScore);
+
+    private string Verdict => Position == Players.Count && Players.Count > 1
+        ? "Último puesto"
+        : $"Quedas {Position}º de {Players.Count}";
+
+    private static string Initial(string name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
+
+    protected override void OnInitialized() => _ = RunAsync(_cts.Token);
+
+    private async Task RunAsync(CancellationToken token)
+    {
+        try
+        {
+            if (Won)
+            {
+                await Task.Delay(350, token);
+                Audio.Play(Sfx.Victory);
+                await Task.Delay(700, token);
+                Party.Burst(170);
+                await Task.Delay(1900, token);
+                Party.Burst(120);
+            }
+            else
+            {
+                await Task.Delay(500, token);
+                Audio.Play(Sfx.Defeat);
+            }
+
+            await Task.Delay(Duration - (Won ? 2950 : 500), token);
+            await InvokeAsync(() => OnDone.InvokeAsync());
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task Skip()
+    {
+        _cts.Cancel();
+        await OnDone.InvokeAsync();
+    }
+
+    public void Dispose() => _cts.Cancel();
+}

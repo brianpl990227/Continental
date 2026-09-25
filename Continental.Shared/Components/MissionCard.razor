@@ -1,0 +1,47 @@
+<div class="mission mission--@Mission.Difficulty.ToString().ToLowerInvariant() @(Done ? "mission--done" : "")">
+    <span class="mission__icon">@Mission.Icon</span>
+    <span class="mission__main">
+        <span class="mission__top">
+            <span class="mission__title">@Mission.Title</span>
+            <span class="mission__diff">@Difficulty</span>
+        </span>
+        <span class="mission__detail">@Mission.Detail</span>
+        <span class="bar"><span class="bar__fill" style="width:@Width"></span></span>
+        <span class="mission__meta">
+            <span>@Math.Min(Progress, Mission.Target) / @Mission.Target</span>
+            <span class="mission__xp">@(Done ? "✓ Hecha" : $"+{Mission.Xp} XP")</span>
+        </span>
+    </span>
+    @if (CanReroll)
+    {
+        <button class="mission__reroll" @onclick="OnReroll" aria-label="Cambiar esta misión" title="Cambiar esta misión">↻</button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Mission Mission { get; set; } = default!;
+
+    [Parameter] public int Progress { get; set; }
+
+    [Parameter] public bool Done { get; set; }
+
+    [Parameter] public bool CanReroll { get; set; }
+
+    [Parameter] public EventCallback OnReroll { get; set; }
+
+    private string Difficulty => Mission.Difficulty switch
+    {
+        Continental.Core.Progress.Difficulty.Easy => "fácil",
+        Continental.Core.Progress.Difficulty.Medium => "media",
+        _ => "difícil"
+    };
+
+    private string Width
+    {
+        get
+        {
+            var fraction = Done ? 1 : Math.Clamp((double)Progress / Mission.Target, 0, 1);
+            return $"{(fraction * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}%";
+        }
+    }
+}

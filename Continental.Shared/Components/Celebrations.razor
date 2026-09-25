@@ -1,0 +1,262 @@
+@implements IDisposable
+@inject ProgressService Progress
+@inject GameAudio Audio
+@inject Confetti Party
+
+@if (Current is { } c)
+{
+    @if (c.Kind == CelebrationKind.LevelUp)
+    {
+        var unlocked = c.Unlocked ?? [];
+
+        <div class="levelup @(c.Level > 0 ? "" : "levelup--reward")" @key="Seq" role="dialog" aria-label="@(c.Level > 0 ? $"Subes al nivel {c.Level}" : "Nuevo premio")" @onclick="Dismiss">
+            <div class="levelup__rays" aria-hidden="true"></div>
+            <div class="levelup__card" @onclick:stopPropagation="true">
+                @if (c.Level > 0)
+                {
+                    <div class="levelup__label">¡Subes de nivel!</div>
+                    <div class="levelup__ring rank--@Leveling.RankFor(c.Level).Tier">
+                        <span class="levelup__level">@c.Level</span>
+                    </div>
+                    <div class="levelup__rank">@Leveling.RankFor(c.Level).Name</div>
+                }
+                else
+                {
+                    <div class="levelup__label">¡Nuevo premio!</div>
+                    <div class="levelup__gift" aria-hidden="true">🎁</div>
+                }
+
+                @if (unlocked.Count > 0)
+                {
+                    <div class="levelup__unlocks-title">@(unlocked.Count == 1 ? "Desbloqueas" : $"Desbloqueas {unlocked.Count} premios")</div>
+                    <div class="levelup__unlocks">
+                        @foreach (var (item, index) in unlocked.Take(6).Select((u, i) => (u, i)))
+                        {
+                            <div class="unlock" style="--d:@(index * 120 + 500)ms">
+                                <CosmeticSwatch Item="item" Small="true" />
+                                @if (item.Kind != CosmeticKind.Title)
+                                {
+                                    <span class="unlock__name">@item.Name</span>
+                                }
+                                <span class="unlock__kind">@Cosmetics.KindSingular(item.Kind)</span>
+                            </div>
+                        }
+                    </div>
+                    @if (unlocked.Count > 6)
+                    {
+                        <div class="levelup__more">y @(unlocked.Count - 6) más en tu colección</div>
+                    }
+                }
+
+                <button class="btn btn--primary" style="width:100%;margin-top:16px" @onclick="Dismiss">¡Vamos!</button>
+            </div>
+        </div>
+    }
+    else if (Batch.Count > 1)
+    {
+        <div class="feat feat--multi" @key="Seq" role="status" aria-live="assertive" style="--life:@(MultiMs)ms" @onclick="Dismiss">
+            <div class="feat__medal" aria-hidden="true">
+                <span class="feat__rays"></span>
+                <span class="feat__icon feat__icon--count">@Batch.Count</span>
+            </div>
+            <div class="feat__body">
+                <div class="feat__label">@MultiLabel</div>
+                <ul class="feat__list">
+                    @foreach (var (item, index) in Batch.Take(ShownLines).Select((m, i) => (m, i)))
+                    {
+                        <li style="--d:@(index * 140 + 250)ms"><span>@item.Icon</span> @item.Title <b>+@item.Xp</b></li>
+                    }
+                    @if (Batch.Count > ShownLines)
+                    {
+                        <li class="feat__more" style="--d:@(ShownLines * 140 + 250)ms">y @(Batch.Count - ShownLines) más en tus misiones</li>
+                    }
+                </ul>
+            </div>
+            <div class="feat__xp">+@Batch.Sum(m => m.Xp)<span>XP</span></div>
+            <div class="feat__shine" aria-hidden="true"></div>
+            <div class="feat__timer" aria-hidden="true" style="animation-duration:@(MultiMs)ms"></div>
+        </div>
+    }
+    else
+    {
+        var mission = c.Mission;
+        var secret = mission?.Scope == MissionScope.Secret;
+        var xp = c.Kind == CelebrationKind.DailyBonus ? MissionCatalog.DailyBonusXp : mission?.Xp ?? 0;
+
+        <div class="feat @(secret ? "feat--secret" : "") @(c.Kind == CelebrationKind.DailyBonus ? "feat--bonus" : "")"
+             @key="Seq" role="status" aria-live="assertive" style="--life:@(BannerMs)ms" @onclick="Dismiss">
+            <div class="feat__medal" aria-hidden="true">
+                <span class="feat__rays"></span>
+                <span class="feat__icon">@(c.Kind == CelebrationKind.DailyBonus ? "🌞" : mission?.Icon)</span>
+            </div>
+            <div class="feat__body">
+                <div class="feat__label">@Label(c)</div>
+                <div class="feat__title">@(c.Kind == CelebrationKind.DailyBonus ? "¡Día redondo!" : mission?.Title)</div>
+                <div class="feat__detail">@(c.Kind == CelebrationKind.DailyBonus ? "Completaste las tres misiones diarias." : mission?.Detail)</div>
+            </div>
+            <div class="feat__xp">+@xp<span>XP</span></div>
+            <div class="feat__shine" aria-hidden="true"></div>
+            <div class="feat__timer" aria-hidden="true" style="animation-duration:@(BannerMs)ms"></div>
+        </div>
+    }
+}
+
+@code {
+    private const int BannerMs = 3600;
+    private const int MultiMs = 5200;
+    private const int LevelMs = 7000;
+    private const int ShownLines = 5;
+
+    private Celebration? Current;
+    private List<Mission> Batch = [];
+    private int Seq;
+    private CancellationTokenSource? _timer;
+    private bool _ready;
+    private bool _scheduled;
+
+    protected override void OnInitialized()
+    {
+        Progress.CelebrationQueued += OnQueued;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        await Audio.InitAsync();
+        await Party.InitAsync();
+        _ready = true;
+
+        if (!Paused && Current is null && Progress.PendingCelebrations > 0)
+            ShowNext();
+    }
+
+    private static string Label(Celebration c)
+    {
+        if (c.Kind == CelebrationKind.DailyBonus)
+            return $"Bonus diario";
+
+        return c.Mission?.Scope switch
+        {
+            MissionScope.Daily => "¡Misión diaria cumplida!",
+            MissionScope.Weekly => "¡Misión semanal cumplida!",
+            MissionScope.Secret => "¡Secreto descubierto!",
+            _ => "¡Logro conseguido!"
+        };
+    }
+
+    private string MultiLabel
+    {
+        get
+        {
+            var scopes = Batch.Select(m => m.Scope).Distinct().ToList();
+
+            if (scopes.Count == 1 && scopes[0] == MissionScope.Achievement)
+                return $"¡{Batch.Count} logros conseguidos!";
+
+            return $"¡{Batch.Count} misiones cumplidas!";
+        }
+    }
+
+    private static bool Batchable(Celebration? c)
+        => c is { Kind: CelebrationKind.Mission, Mission: { } m } && m.Scope != MissionScope.Secret;
+
+    [Parameter] public bool Paused { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (_ready && !Paused && Current is null && !_scheduled && Progress.PendingCelebrations > 0)
+            _ = ShowNextSoon();
+    }
+
+    private void OnQueued() => InvokeAsync(() =>
+    {
+        if (_ready && !Paused && Current is null && !_scheduled)
+            ShowNext();
+    });
+
+    private void ShowNext()
+    {
+        if (Paused || Current is not null)
+            return;
+
+        _timer?.Cancel();
+
+        Current = Progress.NextCelebration();
+
+        if (Current is null)
+        {
+            StateHasChanged();
+            return;
+        }
+
+        Seq++;
+        Batch = [];
+
+        if (Batchable(Current))
+        {
+            Batch.Add(Current.Mission!);
+
+            while (Batchable(Progress.PeekCelebration()))
+                Batch.Add(Progress.NextCelebration()!.Mission!);
+        }
+
+        if (Current.Kind == CelebrationKind.LevelUp)
+        {
+            Audio.Play(Current.Level > 0 ? Sfx.LevelUp : Sfx.Unlock);
+            Party.Burst(Current.Level > 0 ? 150 : 70);
+        }
+        else
+        {
+            Audio.Play(Sfx.Mission);
+            Party.Sparkle(0, 58, 34, Current.Mission?.Scope == MissionScope.Secret ? "secret" : "gold");
+        }
+
+        var cts = _timer = new CancellationTokenSource();
+        _ = AutoDismissAsync(Current.Kind == CelebrationKind.LevelUp ? LevelMs : Batch.Count > 1 ? MultiMs : BannerMs, cts.Token);
+
+        StateHasChanged();
+    }
+
+    private async Task AutoDismissAsync(int ms, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(ms, token);
+            await InvokeAsync(Advance);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void Advance()
+    {
+        Current = null;
+        StateHasChanged();
+
+        if (!_scheduled)
+            _ = ShowNextSoon();
+    }
+
+    private async Task ShowNextSoon()
+    {
+        _scheduled = true;
+        await Task.Delay(260);
+        _scheduled = false;
+        await InvokeAsync(ShowNext);
+    }
+
+    private void Dismiss()
+    {
+        _timer?.Cancel();
+        Advance();
+    }
+
+    public void Dispose()
+    {
+        _timer?.Cancel();
+        Progress.CelebrationQueued -= OnQueued;
+    }
+}

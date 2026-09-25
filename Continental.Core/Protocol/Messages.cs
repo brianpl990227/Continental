@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Continental.Core.Engine;
 using Continental.Core.Rules;
 
 namespace Continental.Core.Protocol;
@@ -22,6 +23,7 @@ public static class MessageType
     public const string PlayAgain = "playagain";
     public const string Leave = "leave";
     public const string Chat = "chat";
+    public const string Badge = "badge";
 
     public const string Ping = "ping";
 
@@ -56,6 +58,8 @@ public sealed class ClientMessage
     public List<MeldSpecDto>? Melds { get; set; }
 
     public GameOptions? Options { get; set; }
+
+    public PlayerBadge? Badge { get; set; }
 }
 
 public sealed class ServerMessage

@@ -6,6 +6,7 @@
 @inject GameAudio Audio
 @inject CardFlight Flights
 @inject Confetti Party
+@inject ProgressService Progress
 
 @if (View is null)
 {
@@ -72,8 +73,18 @@ else if (View.Phase == GamePhase.Lobby)
             @foreach (var player in View.Players.OrderBy(p => p.Seat))
             {
                 <div class="lobby__player">
-                    <span class="seat__avatar">@Initial(player.Name)</span>
-                    <span style="flex:1">@player.Name</span>
+                    <span class="seat__avatar @(player.Badge?.Avatar is null ? "" : "seat__avatar--emoji")">@AvatarOf(player)</span>
+                    <span class="lobby__who">
+                        <span>@player.Name</span>
+                        @if (player.Badge?.Title is { } title)
+                        {
+                            <span class="lobby__title">@title</span>
+                        }
+                    </span>
+                    @if (player.Badge is { } badge)
+                    {
+                        <span class="lvl lvl--sm rank--@Leveling.RankFor(badge.Level).Tier" title="Nivel @badge.Level"><span class="lvl__n">@badge.Level</span></span>
+                    }
                     @if (player.IsHost)
                     {
                         <span class="lobby__badge">Anfitrión</span>
@@ -145,14 +156,37 @@ else
     <div class="table">
         <RoundLadder RoundIndex="View.RoundIndex" Options="View.Options" />
 
+        @if (ShowIntro)
+        {
+            <GameIntro Players="View.Players" YouId="@View.YouId" Contract="@View.ContractText" OnDone="EndIntro" />
+        }
+        else if (RoundCard is { } card)
+        {
+            <div class="roundcard" @key="card" role="status">
+                <span class="roundcard__n">Ronda @(card + 1) de @View.TotalRounds</span>
+                <span class="roundcard__code">@RoundContract.Standard[card].Code</span>
+                <span class="roundcard__text">@RoundContract.Standard[card].Describe()</span>
+            </div>
+        }
+
         <div class="seats">
             @foreach (var player in View.Players.Where(p => p.Id != View.YouId).OrderBy(p => p.Seat))
             {
                 <div class="seat seat--s@(Accent(player.Seat)) @(player.IsCurrent ? "seat--current" : "") @(player.IsBot ? "seat--bot" : "") @(player.IsConnected ? "" : "seat--offline")"
                      data-seat="@player.Id">
-                    <span class="seat__avatar">@Initial(player.Name)</span>
+                    <span class="seat__avatar @(player.Badge?.Avatar is null ? "" : "seat__avatar--emoji")">
+                        @AvatarOf(player)
+                        @if (player.Badge is { } badge)
+                        {
+                            <span class="seat__lvl rank--@Leveling.RankFor(badge.Level).Tier" title="@(badge.Title is null ? $"Nivel {badge.Level}" : $"Nivel {badge.Level} · {badge.Title}")">@badge.Level</span>
+                        }
+                    </span>
                     <span class="seat__info">
                         <span class="seat__name">@player.Name</span>
+                        @if (player.Badge?.Title is { } seatTitle)
+                        {
+                            <span class="seat__title">@seatTitle</span>
+                        }
                         <span class="seat__stats">
                             <span>@player.CardCount 🂠</span>
                             <span>@player.TotalScore</span>
@@ -170,8 +204,8 @@ else
             <div class="chatter" aria-live="polite">
                 @foreach (var line in Bubbles)
                 {
-                    <div class="bubble seat--s@(Accent(SeatOf(line.PlayerId))) @(line.PlayerId == View.YouId ? "bubble--mine" : "")" @key="line.Seq">
-                        <span class="bubble__avatar">@Initial(line.Name)</span>
+                    <div class="bubble seat--s@(Accent(SeatOf(line.PlayerId))) @(line.PlayerId == View.YouId ? "bubble--mine" : "") @(IsEmote(line.Text) ? "bubble--emote" : "")" @key="line.Seq">
+                        <span class="bubble__avatar">@AvatarFor(line.PlayerId, line.Name)</span>
                         <span class="bubble__body">
                             <span class="bubble__name">@(line.PlayerId == View.YouId ? "Tú" : line.Name)</span>
                             <span class="bubble__text">@line.Text</span>
@@ -274,7 +308,7 @@ else
             }
         </div>
 
-        <HandFan Cards="DisplayHand" Selected="Selected" OnToggle="ToggleCard" Dealing="Dealing" />
+        <HandFan Cards="DisplayHand" Selected="Selected" OnToggle="ToggleCard" OnClear="DeselectAll" Dealing="Dealing" />
 
         <div class="actions">
             <button class="btn btn--icon" @onclick="Sort" aria-label="Ordenar la mano"
@@ -386,9 +420,13 @@ else
                           Advance="@(View.YouAreHost ? EventCallback.Factory.Create(this, NextRound) : default)"
                           AdvanceLabel="Siguiente ronda" />
         }
+        else if (View.Phase == GamePhase.GameOver && ShowFinale)
+        {
+            <GameFinale Players="View.Players" YouId="@View.YouId" OnDone="EndFinale" />
+        }
         else if (View.Phase == GamePhase.GameOver && !ShowScores)
         {
-            <RoundOutcome View="View" IsGameOver="true" OnShowScores="@(() => ShowScores = true)"
+            <RoundOutcome View="View" IsGameOver="true" Summary="Progress.SummaryFor(View)" OnShowScores="@(() => ShowScores = true)"
                           Advance="@(View.YouAreHost ? EventCallback.Factory.Create(this, PlayAgain) : default)"
                           AdvanceLabel="Jugar otra vez" />
         }
@@ -413,10 +451,10 @@ else
                     {
                         var mine = line.PlayerId == View.YouId;
 
-                        <div class="msg seat--s@(Accent(SeatOf(line.PlayerId))) @(mine ? "msg--mine" : "")" @key="line.Seq">
+                        <div class="msg seat--s@(Accent(SeatOf(line.PlayerId))) @(mine ? "msg--mine" : "") @(IsEmote(line.Text) ? "msg--emote" : "")" @key="line.Seq">
                             @if (!mine)
                             {
-                                <span class="msg__avatar">@Initial(line.Name)</span>
+                                <span class="msg__avatar">@AvatarFor(line.PlayerId, line.Name)</span>
                             }
                             <span class="msg__body">
                                 @if (!mine)
@@ -430,7 +468,7 @@ else
                 </div>
 
                 <div class="chat__quick">
-                    @foreach (var quick in QuickReplies)
+                    @foreach (var quick in Progress.QuickPhrases)
                     {
                         <button class="chip" @onclick="@(() => SendChat(quick))">@quick</button>
                     }
@@ -446,6 +484,8 @@ else
         }
     </div>
 }
+
+<Celebrations Paused="@(ShowIntro || ShowFinale)" />
 
 @if (View is not null && ShowRules)
 {
@@ -491,6 +531,11 @@ else
     private int LastStealSecond = -1;
     private bool WasMyTurn;
     private GamePhase LastPhase = GamePhase.Lobby;
+    private int SentBadgeVersion = -1;
+    private bool SawLobby;
+    private bool ShowIntro;
+    private bool ShowFinale;
+    private int? RoundCard;
     private string? LastErrorHeard;
 
     private HashSet<int>? PrevHandIds;
@@ -506,8 +551,6 @@ else
     private int LastHeardSeq;
     private readonly Dictionary<int, DateTime> BubbleShownAt = [];
     private static readonly TimeSpan BubbleLife = TimeSpan.FromSeconds(7.4);
-
-    private static readonly string[] QuickReplies = ["jajaja", "¡Qué morro!", "Venga, que es tu turno", "Buena jugada 👏", "Eso no vale", "😭"];
 
     private static readonly Card Hidden = new(-1, Suit.Spades, Rank.Two);
 
@@ -608,6 +651,12 @@ else
 
             await Flights.InitAsync();
             await Party.InitAsync();
+            await Progress.LoadAsync();
+
+            if (View is { } current)
+                Progress.Observe(current);
+
+            await SendBadgeAsync();
 
             StateHasChanged();
             return;
@@ -626,12 +675,32 @@ else
     {
         if (View is { } view)
         {
-            if (view.RoundIndex != LastRound && view.Phase == GamePhase.Draw)
+            if (view.Phase == GamePhase.Lobby)
             {
+                SawLobby = true;
+                LastRound = -1;
+            }
+
+            if (view.RoundIndex != LastRound && view.Phase is GamePhase.Draw or GamePhase.StealWindow or GamePhase.Action)
+            {
+                var opening = SawLobby && view.RoundIndex == 0 && LastRound < 0;
+
                 LastRound = view.RoundIndex;
-                Dealing = true;
                 Swapping = null;
-                _ = ClearDealingSoon();
+                SawLobby = false;
+
+                if (opening)
+                {
+                    ShowIntro = true;
+                    Dealing = false;
+                    _ = EndIntroLaterAsync();
+                }
+                else
+                {
+                    Dealing = true;
+                    _ = ClearDealingSoon();
+                    _ = ShowRoundCardAsync(view.RoundIndex);
+                }
             }
 
             if (view.Hand.Count != LastHandCount)
@@ -648,6 +717,10 @@ else
             Sonify(view);
             QueueFlights(view);
             TrackChat(view);
+            Progress.Observe(view);
+
+            if (SentBadgeVersion != Progress.BadgeVersion)
+                _ = SendBadgeAsync();
         }
 
         StateHasChanged();
@@ -852,7 +925,8 @@ else
             {
                 ShowScores = false;
                 ShowChat = false;
-                Celebrate(view, isGameOver: true);
+                ShowFinale = true;
+                _ = EndFinaleLaterAsync();
             }
         }
 
@@ -864,6 +938,56 @@ else
         LastErrorHeard = Error;
     }
 
+    private async Task EndFinaleLaterAsync()
+    {
+        await Task.Delay(GameFinale.Duration + 1500);
+
+        if (ShowFinale)
+            await InvokeAsync(EndFinale);
+    }
+
+    private void EndFinale()
+    {
+        if (!ShowFinale)
+            return;
+
+        ShowFinale = false;
+        StateHasChanged();
+    }
+
+    private async Task EndIntroLaterAsync()
+    {
+        await Task.Delay(GameIntro.Duration + 1500);
+
+        if (ShowIntro)
+            await InvokeAsync(EndIntro);
+    }
+
+    private void EndIntro()
+    {
+        if (!ShowIntro)
+            return;
+
+        ShowIntro = false;
+        Dealing = true;
+        Audio.Play(Sfx.Shuffle);
+        _ = ClearDealingSoon();
+        StateHasChanged();
+    }
+
+    private async Task ShowRoundCardAsync(int round)
+    {
+        RoundCard = round;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(2100);
+
+        if (RoundCard == round)
+        {
+            RoundCard = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
     private async Task ClearDealingSoon()
     {
         await Task.Delay(1200);
@@ -873,6 +997,33 @@ else
 
     private static string Initial(string name)
         => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
+
+    private static string AvatarOf(PlayerSummary player) => player.Badge?.Avatar ?? Initial(player.Name);
+
+    private string AvatarFor(string playerId, string name)
+        => View?.Players.FirstOrDefault(p => p.Id == playerId)?.Badge?.Avatar ?? Initial(name);
+
+    private static bool IsEmote(string text)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Length is > 0 and <= 12 && !trimmed.Any(char.IsLetterOrDigit);
+    }
+
+    private async Task SendBadgeAsync()
+    {
+        if (Client is null || View?.Tally is null || Progress.Badge is not { } badge)
+            return;
+
+        SentBadgeVersion = Progress.BadgeVersion;
+
+        try
+        {
+            await Client.SendAsync(new ClientMessage { Type = MessageType.Badge, Badge = badge });
+        }
+        catch (Exception)
+        {
+        }
+    }
 
     private async Task Send(ClientMessage message)
     {
@@ -947,6 +1098,14 @@ else
         Hint = null;
         RefreshSelection();
         Audio.Play(Sfx.Select);
+    }
+
+    private void DeselectAll()
+    {
+        Swapping = null;
+        Hint = null;
+        ClearSelection();
+        Audio.Play(Sfx.Tap);
     }
 
     private IReadOnlyList<Card> DisplayHand

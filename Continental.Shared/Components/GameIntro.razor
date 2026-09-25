@@ -1,0 +1,86 @@
+@implements IDisposable
+@inject GameAudio Audio
+
+<div class="intro" role="dialog" aria-label="Empieza la partida" @onclick="Skip">
+    <div class="intro__rays" aria-hidden="true"></div>
+
+    <div class="intro__deck" aria-hidden="true">
+        @for (var i = 0; i < 10; i++)
+        {
+            <div class="card intro__card" style="--i:@i"><div class="card__back"></div></div>
+        }
+    </div>
+
+    <div class="intro__stage">
+        <div class="intro__kicker">Empieza la partida</div>
+        <div class="intro__title">Continental</div>
+
+        <div class="intro__players">
+            @foreach (var (player, index) in Players.OrderBy(p => p.Seat).Select((p, i) => (p, i)))
+            {
+                <div class="intro__player @(player.Id == YouId ? "intro__player--you" : "")" style="--d:@(700 + index * 170)ms;--side:@(index % 2 == 0 ? -1 : 1)">
+                    <span class="intro__avatar">@(player.Badge?.Avatar ?? Initial(player.Name))</span>
+                    <span class="intro__name">@(player.Id == YouId ? "Tú" : player.Name)</span>
+                    @if (player.Badge is { } badge)
+                    {
+                        <span class="intro__lvl rank--@Leveling.RankFor(badge.Level).Tier">@badge.Level</span>
+                    }
+                    else if (player.IsBot)
+                    {
+                        <span class="intro__bot">bot</span>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="intro__round" style="--d:@(900 + Players.Count * 170)ms">
+            <span>Ronda 1 de 7</span>
+            <strong>@Contract</strong>
+        </div>
+
+        <div class="intro__go" style="--d:@(GoAt)ms">¡A jugar!</div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PlayerSummary> Players { get; set; } = [];
+
+    [Parameter] public string YouId { get; set; } = "";
+
+    [Parameter] public string Contract { get; set; } = "";
+
+    [Parameter] public EventCallback OnDone { get; set; }
+
+    public const int Duration = 4000;
+
+    private readonly CancellationTokenSource _cts = new();
+
+    private int GoAt => 1400 + Players.Count * 170;
+
+    private static string Initial(string name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
+
+    protected override void OnInitialized() => _ = RunAsync(_cts.Token);
+
+    private async Task RunAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(GoAt, token);
+            Audio.Play(Sfx.Start);
+            await Task.Delay(Math.Max(900, Duration - GoAt), token);
+            await InvokeAsync(() => OnDone.InvokeAsync());
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task Skip()
+    {
+        _cts.Cancel();
+        await OnDone.InvokeAsync();
+    }
+
+    public void Dispose() => _cts.Cancel();
+}
