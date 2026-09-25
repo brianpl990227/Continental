@@ -411,6 +411,7 @@ public static class ProgressEngine
                     continue;
 
                 profile.Achievements.Add(mission.Id);
+                profile.Unseen.Add(mission.Id);
                 Award(profile, report, mission);
                 profile.Lifetime.Add(Stat.AchievementsCompleted, 1);
                 progressed = true;

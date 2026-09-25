@@ -49,7 +49,11 @@
             <a class="quick__btn" href="stats"><span class="quick__icon">📊</span>Estadísticas</a>
             <a class="quick__btn" href="missions">
                 <span class="quick__icon">🎯</span>Misiones
-                @if (DailyLeft > 0)
+                @if (Progress.UnseenMissions > 0)
+                {
+                    <span class="quick__badge quick__badge--new">@Progress.UnseenMissions</span>
+                }
+                else if (DailyLeft > 0)
                 {
                     <span class="quick__badge">@DailyLeft</span>
                 }

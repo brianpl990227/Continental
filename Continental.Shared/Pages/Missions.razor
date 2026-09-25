@@ -6,11 +6,15 @@
         @foreach (var (id, label) in Sections)
         {
             <button class="seg__btn @(Section == id ? "seg__btn--on" : "")" role="tab" aria-selected="@(Section == id)"
-                    @onclick="@(() => Section = id)">
+                    @onclick="@(() => Open(id))">
                 @label
                 @if (id == "daily" && DailyLeft > 0)
                 {
                     <span class="seg__count">@DailyLeft</span>
+                }
+                else if (ScopeOf(id) is { } scope && Progress.UnseenIn(scope) > 0)
+                {
+                    <span class="seg__count seg__count--new">@Progress.UnseenIn(scope)</span>
                 }
             </button>
         }
@@ -89,7 +93,13 @@
                         <button class="family__head" @onclick="@(() => Toggle(family.Key))" aria-expanded="@expanded">
                             <span class="family__icon">@shown.Icon</span>
                             <span class="family__main">
-                                <span class="family__title">@shown.Title</span>
+                                <span class="family__title">
+                                    @shown.Title
+                                    @if (IsFresh(family))
+                                    {
+                                        <span class="new-tag">NUEVO</span>
+                                    }
+                                </span>
                                 <span class="family__detail">@shown.Detail</span>
                                 @if (next is not null)
                                 {
@@ -119,7 +129,13 @@
                                     <div class="tier @(P.HasCompleted(tier.Id) ? "tier--done" : "")">
                                         <span class="tier__check">@(P.HasCompleted(tier.Id) ? "✓" : "·")</span>
                                         <span class="tier__text">
-                                            <span>@tier.Title</span>
+                                            <span>
+                                                @tier.Title
+                                                @if (SeenNow.Contains(tier.Id))
+                                                {
+                                                    <span class="new-tag">NUEVO</span>
+                                                }
+                                            </span>
                                             <span class="tier__detail">@tier.Detail</span>
                                             @if (reward is not null)
                                             {
@@ -143,7 +159,7 @@
             </div>
 
             <div class="secrets">
-                @foreach (var secret in MissionCatalog.Secrets.OrderByDescending(s => P.HasCompleted(s.Id)))
+                @foreach (var secret in MissionCatalog.Secrets.OrderByDescending(s => SeenNow.Contains(s.Id)).ThenByDescending(s => P.HasCompleted(s.Id)))
                 {
                     var done = P.HasCompleted(secret.Id);
                     var reward = RewardOf(secret);
@@ -151,7 +167,13 @@
                     <div class="secret @(done ? "secret--done" : "")">
                         <span class="secret__icon">@(done ? secret.Icon : "❔")</span>
                         <span class="secret__main">
-                            <span class="secret__title">@(done ? secret.Title : "Secreto")</span>
+                            <span class="secret__title">
+                                @(done ? secret.Title : "Secreto")
+                                @if (SeenNow.Contains(secret.Id))
+                                {
+                                    <span class="new-tag">NUEVO</span>
+                                }
+                            </span>
                             <span class="secret__detail">@(done ? secret.Detail : "Sigue jugando para descubrirlo.")</span>
                             @if (done && reward is not null)
                             {
@@ -170,6 +192,7 @@
     private string Section = "daily";
     private string Filter = "near";
     private readonly HashSet<string> Expanded = [];
+    private HashSet<string> SeenNow = [];
 
     private static readonly (string Id, string Label)[] Sections =
     [
@@ -209,13 +232,42 @@
                     return new Family(g.Key, tiers, tiers.Count(t => P.HasCompleted(t.Id)), next, closeness);
                 });
 
+            var fresh = families.OrderByDescending(IsFresh);
+
             return Filter == "near"
-                ? families.OrderByDescending(f => f.Closeness)
-                : families;
+                ? fresh.ThenByDescending(f => f.Closeness)
+                : fresh;
         }
     }
 
-    private bool Matches(Family family) => Filter switch
+    private bool IsFresh(Family family) => family.Tiers.Any(t => SeenNow.Contains(t.Id));
+
+    private static MissionScope? ScopeOf(string section) => section switch
+    {
+        "achievements" => MissionScope.Achievement,
+        "secrets" => MissionScope.Secret,
+        _ => null
+    };
+
+    private async Task Open(string section)
+    {
+        Section = section;
+
+        if (ScopeOf(section) is not { } scope)
+            return;
+
+        var fresh = await Progress.MarkMissionsSeenAsync(scope);
+
+        if (fresh.Count == 0)
+            return;
+
+        SeenNow = [.. SeenNow, .. fresh];
+
+        foreach (var id in fresh)
+            Expanded.Add(id[..id.LastIndexOf('.')]);
+    }
+
+    private bool Matches(Family family) => IsFresh(family) || Filter switch
     {
         "done" => family.Done > 0,
         "open" => family.Next is not null,

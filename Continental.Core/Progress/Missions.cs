@@ -338,7 +338,7 @@ public static class MissionCatalog
             Secret("resilient", "🧱", "Resiliente", "Encadena 5 derrotas seguidas. Y sigue jugando.", Stat.BestLossStreak, 5, 50),
             Secret("seven", "7️⃣", "Pleno", "Cierra las siete rondas de una partida.", Stat.MaxClosesInGame, 7, 200),
             Secret("hoarder", "🧲", "Aspiradora", "Roba de contra 10 veces en una partida.", Stat.MaxStealsInGame, 10),
-            Secret("tower", "🗼", "Torre", "Ten una escalera tuya de 14 cartas.", Stat.LongestEscalera, 14, 150),
+            Secret("tower", "🗼", "Torre", "Ten una escalera tuya de 13 cartas: un palo entero.", Stat.LongestEscalera, 13, 150),
             Secret("untouchable", "👻", "Intocable", "Acaba las siete rondas de una partida con 0 puntos o menos.", Stat.UntouchableGames, xp: 300),
             Secret("party3", "🥳", "Fiesta", "Gana una partida con tres personas más en la mesa.", Stat.WinsVsThreeHumans, xp: 100),
             Secret("almost", "😬", "Casi", "Pierde por 5 puntos o menos.", Stat.LostByHair, xp: 50),

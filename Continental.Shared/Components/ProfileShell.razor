@@ -34,6 +34,10 @@
             {
                 <span class="prof__dot">@DailyLeft</span>
             }
+            @if (Progress.UnseenMissions > 0)
+            {
+                <span class="prof__dot prof__dot--new">@Progress.UnseenMissions</span>
+            }
         </a>
         <a class="prof__tab @(Tab == "collection" ? "prof__tab--on" : "")" href="collection">
             🎨 Colección

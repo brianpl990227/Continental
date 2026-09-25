@@ -44,6 +44,10 @@ public class MissionCatalogTests
         });
 
     [Fact]
+    public void No_mission_asks_for_a_longer_escalera_than_the_rules_allow()
+        => Assert.All(MissionCatalog.All.Where(m => m.Stat == Stat.LongestEscalera), m => Assert.True(m.Target <= 13, m.Id));
+
+    [Fact]
     public void Tiers_grow_monotonically()
     {
         foreach (var group in MissionCatalog.Achievements.GroupBy(m => m.Id[..m.Id.LastIndexOf('.')]))
@@ -354,6 +358,13 @@ public class ProgressEngineTests
         Assert.Equal(3, profile.Rivals.Count);
         Assert.Null(profile.Active);
         Assert.Single(reports, r => r.GameFinished);
+
+        var lifetime = reports.SelectMany(r => r.Missions)
+            .Where(m => m.Scope is MissionScope.Achievement or MissionScope.Secret)
+            .Select(m => m.Id)
+            .ToList();
+        Assert.NotEmpty(lifetime);
+        Assert.Equal(lifetime.Order(), profile.Unseen.Order());
 
         var gained = reports.Sum(r => r.XpAfter - r.XpBefore);
         Assert.Equal(profile.Xp, gained);

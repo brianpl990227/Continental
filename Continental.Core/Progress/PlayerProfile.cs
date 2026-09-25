@@ -90,6 +90,8 @@ public sealed class PlayerProfile
 
     public List<string> Seen { get; set; } = [];
 
+    public List<string> Unseen { get; set; } = [];
+
     public int WinStreak { get; set; }
 
     public int LossStreak { get; set; }

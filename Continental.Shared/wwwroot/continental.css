@@ -3162,7 +3162,8 @@ html[data-trail="tornado"] .fly-ghost .card, .swatch.trail--tornado .card { filt
 }
 
 .prof__tab--on .prof__dot { background: var(--felt-0); color: var(--lamp); }
-.prof__dot--new { background: var(--ember); color: #fff; }
+.prof__dot--new,
+.prof__tab--on .prof__dot--new { background: var(--ember); color: #fff; }
 
 .prof__body { padding-top: 8px; }
 
@@ -3559,6 +3560,22 @@ html[data-trail="tornado"] .fly-ghost .card, .swatch.trail--tornado .card { filt
     color: #fff;
     background: var(--ember);
 }
+
+.new-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 5px;
+    border-radius: 5px;
+    vertical-align: 2px;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #fff;
+    background: var(--ember);
+    animation: badge-pop 0.4s var(--ease-spring);
+}
+
+.seg__count--new { color: #fff; background: var(--ember); }
 
 .family {
     margin-bottom: 7px;

@@ -319,6 +319,24 @@ public sealed class ProgressService(IProfileStorage storage, IJSRuntime js) : IA
         Changed?.Invoke();
     }
 
+    public int UnseenIn(MissionScope scope)
+        => IsSupported ? Profile.Unseen.Count(id => MissionCatalog.Find(id)?.Scope == scope) : 0;
+
+    public int UnseenMissions => UnseenIn(MissionScope.Achievement) + UnseenIn(MissionScope.Secret);
+
+    public async Task<HashSet<string>> MarkMissionsSeenAsync(MissionScope scope)
+    {
+        var seen = Profile.Unseen.Where(id => MissionCatalog.Find(id)?.Scope == scope).ToHashSet();
+
+        if (!IsSupported || seen.Count == 0)
+            return seen;
+
+        Profile.Unseen.RemoveAll(seen.Contains);
+        await SaveNowAsync();
+        Changed?.Invoke();
+        return seen;
+    }
+
     public async Task<bool> RerollAsync(string missionId)
     {
         if (!IsSupported)
