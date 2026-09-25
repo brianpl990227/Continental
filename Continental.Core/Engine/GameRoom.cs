@@ -16,15 +16,51 @@ public sealed class GameRoom : IDisposable
     private int _botCounter;
 
     public GameRoom(string roomId, string roomName, GameOptions options)
+        : this(new GameState { RoomId = roomId, RoomName = roomName, Options = options })
     {
-        State = new GameState { RoomId = roomId, RoomName = roomName, Options = options };
+    }
+
+    private GameRoom(GameState state)
+    {
+        State = state;
         _engine = new GameEngine(State, _random);
+        _botCounter = State.Players.Select(p => p.Id.StartsWith("bot-") && int.TryParse(p.Id.AsSpan(4), out var n) ? n : 0)
+                                   .DefaultIfEmpty()
+                                   .Max();
         _banter = new BotBanter(_random);
         _engine.Changed += () => StateChanged?.Invoke();
         _engine.Happened += e => _banter.React(State, e, DateTimeOffset.UtcNow);
     }
 
     public GameState State { get; }
+
+    public static GameRoom Restore(GameState state)
+    {
+        var room = new GameRoom(state);
+        room._engine.Restore(DateTimeOffset.UtcNow);
+
+        return room;
+    }
+
+    public bool TryCapture(TimeSpan timeout, out string? snapshot)
+    {
+        snapshot = null;
+
+        if (!_gate.Wait(timeout))
+            return false;
+
+        try
+        {
+            snapshot = Capture();
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private string? Capture() => GameSnapshot.IsResumable(State) ? GameSnapshot.Write(State) : null;
 
     public event Action? StateChanged;
 
@@ -69,6 +105,10 @@ public sealed class GameRoom : IDisposable
     private ActionResult Apply(string playerId, ClientMessage m)
     {
         var isHost = State.Find(playerId)?.IsHost ?? false;
+
+        if (State.Paused && m.Type is MessageType.Draw or MessageType.ClaimSteal or MessageType.LayDown
+                or MessageType.Extend or MessageType.SwapJoker or MessageType.Discard or MessageType.NextRound)
+            return ActionResult.Fail("La partida está en pausa.");
 
         switch (m.Type)
         {
@@ -150,6 +190,19 @@ public sealed class GameRoom : IDisposable
             case MessageType.Badge:
                 return _engine.SetBadge(playerId, m.Badge);
 
+            case MessageType.Pause:
+                return _engine.Pause(playerId);
+
+            case MessageType.Resume:
+            {
+                var resumed = _engine.Resume(playerId);
+
+                if (resumed.Ok)
+                    Pause(700, 1200);
+
+                return resumed;
+            }
+
             default:
                 return ActionResult.Fail($"Comando desconocido: {m.Type}");
         }
@@ -172,6 +225,9 @@ public sealed class GameRoom : IDisposable
 
                 try
                 {
+                    if (State.Paused)
+                        continue;
+
                     PumpChat();
 
                     if (_engine.Tick())

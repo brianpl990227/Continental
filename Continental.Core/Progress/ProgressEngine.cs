@@ -57,6 +57,40 @@ public static class ProgressEngine
         return (ISOWeek.GetYear(date) * 100 + ISOWeek.GetWeekOfYear(date)) * 104729 + 31;
     }
 
+    public static bool Migrate(PlayerProfile profile)
+    {
+        if (profile.Version >= PlayerProfile.CurrentVersion)
+            return false;
+
+        profile.Xp = Math.Min(profile.Xp, EarnedXp(profile));
+        profile.Version = PlayerProfile.CurrentVersion;
+
+        return true;
+    }
+
+    public static int EarnedXp(PlayerProfile profile)
+    {
+        var stats = profile.Lifetime;
+        var winsAtBigTables = stats.Get(Stat.WinsTable3) + stats.Get(Stat.WinsFullTable);
+        var seconds = Math.Max(0, stats.Get(Stat.Podiums) - winsAtBigTables);
+
+        var games = stats.Get(Stat.GamesPlayed) * 40
+                    + stats.Get(Stat.RoundsClosed) * 15
+                    + stats.Get(Stat.RoundsLaidDown) * 5
+                    + stats.Get(Stat.GamesWon) * 80
+                    + seconds * 30;
+
+        var missions = profile.Achievements.Sum(id => MissionCatalog.Find(id)?.Xp ?? 0)
+                       + stats.Get(Stat.DailiesCompleted) * AverageXp(MissionScope.Daily)
+                       + stats.Get(Stat.WeekliesCompleted) * AverageXp(MissionScope.Weekly)
+                       + stats.Get(Stat.DailySetsCompleted) * MissionCatalog.DailyBonusXp;
+
+        return games + missions;
+    }
+
+    private static int AverageXp(MissionScope scope)
+        => (int)MissionCatalog.PoolFor(scope).Average(m => m.Xp);
+
     public static bool Roll(PlayerProfile profile, DateTimeOffset now)
     {
         var changed = false;

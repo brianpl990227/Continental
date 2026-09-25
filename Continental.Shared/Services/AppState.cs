@@ -124,4 +124,14 @@ public sealed class NoGameHost : IGameHost
         => throw new NotSupportedException("Desde el navegador solo puedes unirte a una sala, no crearla.");
 
     public Task StopAsync() => Task.CompletedTask;
+
+    public Task<SavedGame?> FindSavedAsync() => Task.FromResult<SavedGame?>(null);
+
+    public Task<IGameClient?> ResumeSavedAsync() => Task.FromResult<IGameClient?>(null);
+
+    public Task ForgetSavedAsync() => Task.CompletedTask;
+
+    public void SaveNow()
+    {
+    }
 }

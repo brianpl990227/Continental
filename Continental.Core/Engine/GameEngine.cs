@@ -21,9 +21,14 @@ public sealed record MeldSpec(MeldKind Kind, IReadOnlyList<int> CardIds);
 public sealed class GameEngine(GameState state, Random? random = null)
 {
     private readonly Random _random = random ?? Random.Shared;
-    private int _meldSequence;
+    private int _meldSequence = HighestMeldNumber(state);
 
     public GameState State { get; } = state;
+
+    private static int HighestMeldNumber(GameState state)
+        => state.Table.Select(m => m.Id.StartsWith('m') && int.TryParse(m.Id.AsSpan(1), out var n) ? n : 0)
+                      .DefaultIfEmpty()
+                      .Max();
 
     public event Action? Changed;
 
@@ -792,6 +797,75 @@ public sealed class GameEngine(GameState state, Random? random = null)
 
         return ActionResult.Success;
     }
+
+    public ActionResult Pause(string playerId)
+    {
+        if (State.Paused)
+            return ActionResult.Success;
+
+        if (!State.CanPause(playerId))
+            return ActionResult.Fail("Solo se puede pausar una partida contra bots.");
+
+        State.Paused = true;
+        State.PausedAt = DateTimeOffset.UtcNow;
+        State.TypingIds.Clear();
+        Notify();
+
+        return ActionResult.Success;
+    }
+
+    public ActionResult Resume(string playerId)
+    {
+        if (!State.Paused)
+            return ActionResult.Success;
+
+        if (State.Find(playerId) is not { IsBot: false })
+            return ActionResult.Fail("Jugador desconocido.");
+
+        var now = DateTimeOffset.UtcNow;
+        var idle = now - (State.PausedAt ?? now);
+
+        if (State.Steal is { } offer)
+            State.Steal = WithDeadline(offer, offer.Deadline + idle);
+
+        State.TurnStartedAt += idle;
+        State.Paused = false;
+        State.PausedAt = null;
+        Notify();
+
+        return ActionResult.Success;
+    }
+
+    public void Restore(DateTimeOffset now)
+    {
+        State.TypingIds.Clear();
+        State.TurnStartedAt = now;
+
+        foreach (var player in State.Players)
+            player.IsConnected = player.IsBot || player.IsHost;
+
+        if (State.Paused)
+            State.PausedAt = now;
+
+        if (State.Steal is { } offer)
+        {
+            if (State.Find(offer.BlockedPlayerId) is { IsConnected: false })
+                PassSteal();
+            else
+                State.Steal = WithDeadline(offer, now.AddSeconds(State.Options.StealWindowSeconds));
+        }
+
+        if (State.Phase is GamePhase.Draw or GamePhase.Action && State.Current is { IsConnected: false })
+            AdvanceTurn();
+    }
+
+    private static StealOffer WithDeadline(StealOffer offer, DateTimeOffset deadline) => new()
+    {
+        Card = offer.Card,
+        BlockedPlayerId = offer.BlockedPlayerId,
+        DiscarderId = offer.DiscarderId,
+        Deadline = deadline
+    };
 
     public bool Tick()
     {

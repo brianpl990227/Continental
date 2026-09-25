@@ -19,7 +19,7 @@ public sealed record Cosmetic(string Id, CosmeticKind Kind, string Name, string 
 
 public static class Cosmetics
 {
-    public const int LadderTop = 150;
+    public const int LadderTop = 100;
 
     public static readonly IReadOnlyList<string> BasePhrases =
         ["jajaja", "¡Qué morro!", "Venga, que es tu turno", "Buena jugada 👏", "Eso no vale", "😭"];
@@ -33,7 +33,8 @@ public static class Cosmetics
     public static readonly IReadOnlyList<(string Id, string Name)> BackColors =
     [
         ("rojo", "rojo"), ("azul", "azul"), ("verde", "verde"), ("morado", "morado"),
-        ("naranja", "naranja"), ("rosa", "rosa"), ("turquesa", "turquesa"), ("negro", "negro")
+        ("naranja", "naranja"), ("rosa", "rosa"), ("turquesa", "turquesa"), ("negro", "negro"),
+        ("dorado", "dorado"), ("plata", "plata"), ("burdeos", "burdeos"), ("celeste", "celeste")
     ];
 
     private const int Ladder = 0;
@@ -131,6 +132,10 @@ public static class Cosmetics
         Back("carbono", "Carbono");
         Back("leyenda", "Leyenda", 65);
         Back("inmortal", "Inmortal", 100);
+        Back("semidios", "Semidiós", 120);
+        Back("eterno", "Eterno", 150);
+        Back("tormenta", "Tormenta", mission: "sec.storm");
+        Back("cazador", "Cazador", mission: "ach.fivebots.4");
         Back("comodin", "Comodín", mission: "ach.swaps.6");
         Back("ladron", "Antifaz", mission: "ach.steals.6");
         Back("galaxia", "Galaxia", mission: "sec.longstreak");
@@ -164,7 +169,19 @@ public static class Cosmetics
         Felt("oliva", "Oliva");
         Felt("coral", "Coral");
         Felt("glaciar", "Glaciar");
+        Felt("menta", "Menta");
+        Felt("mostaza", "Mostaza");
+        Felt("ciruela", "Ciruela");
+        Felt("acero", "Acero");
+        Felt("terracota", "Terracota");
+        Felt("musgo", "Musgo");
+        Felt("indigo", "Índigo");
+        Felt("carmesi", "Carmesí");
         Felt("aurora", "Aurora", 70);
+        Felt("olimpo", "Olimpo", 120);
+        Felt("eterno", "Eterno", 150);
+        Felt("insomne", "Insomne", mission: "sec.insomnia");
+        Felt("fondista", "Pista de fondo", mission: "ach.marathons.3");
         Felt("real", "Casino real", mission: "ach.won.6");
         Felt("cerezo", "Cerezo", mission: "ach.daystreak.5");
         Felt("volcan", "Volcán", mission: "ach.sameturn.5");
@@ -193,7 +210,13 @@ public static class Cosmetics
             ("⚽", "Balón"), ("🏀", "Canasta"), ("🥊", "Guante de boxeo"), ("🗿", "Moái"), ("🏰", "Castillo"), ("🌋", "Volcán"),
             ("🌊", "Ola"), ("❄️", "Copo"), ("☃️", "Muñeco de nieve"), ("🌻", "Girasol"), ("🌹", "Rosa"), ("🍄", "Seta"),
             ("🌲", "Pino"), ("🧛", "Vampiro"), ("🧜", "Sirena"), ("🧞", "Genio"), ("🦸", "Superhéroe"), ("🤡", "Payaso"),
-            ("👻", "Fantasma"), ("🎅", "Papá Noel"), ("🐉", "Dragón chino"), ("👑", "Corona"), ("💎", "Diamante")
+            ("👻", "Fantasma"), ("🎅", "Papá Noel"), ("🐉", "Dragón chino"), ("👑", "Corona"), ("💎", "Diamante"),
+            ("🦫", "Castor"), ("🦡", "Tejón"), ("🦭", "Foca"), ("🐿️", "Ardilla"), ("🦤", "Dodo"), ("🐛", "Oruga"),
+            ("🐟", "Pez"), ("🦗", "Grillo"), ("🐫", "Camello"), ("🐆", "Leopardo"), ("🦬", "Bisonte"), ("🐇", "Liebre"),
+            ("🍕", "Pizza"), ("🥨", "Pretzel"), ("🍤", "Gamba"), ("🥘", "Paella"), ("🍫", "Chocolatina"), ("🧉", "Mate"),
+            ("🎻", "Violín"), ("🪗", "Acordeón"), ("🎲", "Dado"), ("♟️", "Peón"), ("🪁", "Cometa"), ("🛼", "Patín"),
+            ("🏝️", "Isla"), ("🗻", "Monte Fuji"), ("🌪️", "Remolino"), ("🌺", "Hibisco"), ("🪐", "Saturno"), ("☄️", "Meteorito"),
+            ("🧑‍🚀", "Astronauta"), ("🕵️", "Detective"), ("🧑‍🍳", "Cocinero"), ("🧑‍🎤", "Rockero"), ("🥸", "Disfrazado"), ("🤓", "Empollón")
         ];
 
         foreach (var (emoji, name) in ladderAvatars)
@@ -201,6 +224,16 @@ public static class Cosmetics
 
         Avatar("🐐", "Cabra", 75);
         Avatar("🌌", "Galaxia", 90);
+        Avatar("🌠", "Estrella fugaz", 120);
+        Avatar("🏛️", "Panteón", 150);
+        Avatar("🔮", "Bola de cristal", mission: "sec.archmage");
+        Avatar("🪨", "Roca", mission: "sec.rock");
+        Avatar("👯", "Gemelos", mission: "sec.siblings");
+        Avatar("🧱", "Ladrillo", mission: "sec.wall");
+        Avatar("🎰", "Tragaperras", mission: "ach.fastwins.3");
+        Avatar("🛋️", "Sofá", mission: "ach.weekend.3");
+        Avatar("🌅", "Amanecer", mission: "ach.morning.3");
+        Avatar("🏹", "Arquero", mission: "ach.fivebots.3");
         Avatar("🦝", "Mapache", mission: "ach.steals.5");
         Avatar("🎭", "Teatro", mission: "ach.beatdramatica.4");
         Avatar("👵", "Abuela", mission: "sec.elders");
@@ -228,18 +261,10 @@ public static class Cosmetics
         Avatar("🧩", "Pieza", mission: "ach.closeeee.3");
         Avatar("🪜", "Escalera", mission: "ach.longest.6");
 
-        Title("Novato", 1);
+        foreach (var rank in Leveling.Ranks)
+            Title(rank.Name, rank.From);
+
         Title("Sin título", 1);
-        Title("Aprendiz", 5);
-        Title("Jugador de peña", 10);
-        Title("Experto", 15);
-        Title("Crupier", 20);
-        Title("Veterano", 30);
-        Title("Maestro", 40);
-        Title("Gran maestro", 50);
-        Title("Leyenda", 65);
-        Title("Mito", 80);
-        Title("Inmortal del Continental", 100);
 
         string[] ladderTitles =
         [
@@ -247,7 +272,11 @@ public static class Cosmetics
             "Tiburón de mesa", "Rey del pozo", "La calma", "Estratega", "El profesor", "Mente fría", "Pícaro",
             "Zorro viejo", "Pura suerte", "Dedos rápidos", "Cara de póker", "El que nunca tira", "Contador de cartas",
             "Maestro del farol", "Sabio de la mesa", "Terror de los bots", "El elegido", "Carta blanca",
-            "Siete vidas", "Fénix", "El croupier", "Rey de corazones", "Reina de picas", "Jota de diamantes"
+            "Siete vidas", "Fénix", "El croupier", "Rey de corazones", "Reina de picas", "Jota de diamantes",
+            "Barón del descarte", "Duque del comodín", "Rey sin corona", "La leyenda del bar", "Mano de hierro",
+            "Pulso firme", "El tapado", "Silencioso", "Ojo de halcón", "El paciente", "Mago de la baraja",
+            "Carta ganadora", "Doble o nada", "El calculador", "Pies de plomo", "Guante de seda", "Viejo lobo",
+            "Sin miedo", "El jefe de la mesa", "As en la manga"
         ];
 
         foreach (var text in ladderTitles)
@@ -274,7 +303,13 @@ public static class Cosmetics
             ("Pleno al siete", "sec.seven"), ("Intocable", "sec.untouchable"), ("Cero absoluto", "sec.zero"),
             ("Imparable", "sec.longstreak"), ("Completista", "sec.collector"), ("Exterminador", "sec.terminator"),
             ("Dominguero", "sec.sunday"), ("Nieto obediente", "sec.elders"), ("Por los pelos", "sec.hair"),
-            ("Exprés", "sec.fast"), ("Turista", "sec.tourist"), ("Aspiradora", "sec.hoarder")
+            ("Exprés", "sec.fast"), ("Turista", "sec.tourist"), ("Aspiradora", "sec.hoarder"),
+            ("Archimago", "sec.archmage"), ("Roca", "sec.rock"), ("Hermanos de mesa", "sec.siblings"),
+            ("Huracán", "sec.storm"), ("Muralla", "sec.wall"), ("Insomne", "sec.insomnia"),
+            ("Cazador de bots", "ach.fivebots.3"), ("Se aprende perdiendo", "ach.lost.4"), ("Al filo", "ach.hair.3"),
+            ("Ganador exprés", "ach.fastwins.3"), ("Números negros", "ach.negwins.2"), ("Fiesta grande", "ach.vsthree.3"),
+            ("Buen arranque", "ach.threestart.3"), ("Fin de semana", "ach.weekend.3"), ("Trasnochador", "ach.night.3"),
+            ("Tempranero", "ach.morning.3"), ("Fondista", "ach.marathons.3")
         ];
 
         foreach (var (text, mission) in missionTitles)
@@ -318,6 +353,11 @@ public static class Cosmetics
         Trail("sombra", "Sombra");
         Trail("neon", "Neón");
         Trail("sol", "Sol");
+        Trail("menta", "Menta");
+        Trail("cobre", "Cobre");
+        Trail("sangre", "Sangre");
+        Trail("aurora", "Aurora");
+        Trail("tornado", "Tornado", mission: "sec.storm");
         Trail("rayo", "Rayo", mission: "ach.firstturn.4");
         Trail("cometa", "Cometa", mission: "sec.threestart");
 
@@ -336,6 +376,11 @@ public static class Cosmetics
         Phrases("casino", "Casino", ["Las cartas no mienten", "Otra mano, caballeros", "Aquí se viene a ganar", "Voy con todo"]);
         Phrases("fiesta", "Fiesta", ["🎉🎉🎉", "¡Esto hay que celebrarlo!", "¡Que siga la fiesta!", "🍾"]);
         Phrases("lloron", "Llorón", ["Siempre me tocan las malas", "No es justo 😢", "Hoy no es mi día", "Otra vez yo..."]);
+        Phrases("tecnico", "Técnico", ["Probabilidad baja, pero ahí va", "Jugada de manual", "Estadísticamente, me toca", "Calculado 📐"]);
+        Phrases("misterioso", "Misterioso", ["...", "Ya lo verás", "Nadie sospecha nada", "🤫"]);
+        Phrases("motivador", "Motivador", ["¡Tú puedes!", "Esa es la actitud", "¡Vamos, equipo!", "Nunca te rindas 💪"]);
+        Phrases("sarcastico", "Sarcástico", ["Qué sorpresa...", "Nadie lo vio venir", "Brillante, de verdad", "Ah, genial 🙃"]);
+        Phrases("roca", "Roca", ["Otra más, qué le vamos a hacer", "Yo no me rindo", "La próxima es mía", "Firme como una roca 🪨"], mission: "sec.rock");
         Phrases("ladron", "Ladrón", ["Esa me la llevo", "Gracias por el regalo", "Robado con cariño 😇"], mission: "ach.steals.4");
 
         return AssignLadder(list);

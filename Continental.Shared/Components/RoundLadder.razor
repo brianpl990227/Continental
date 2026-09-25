@@ -18,10 +18,21 @@
         <span class="ladder__contract">@RoundContract.Standard[Math.Clamp(RoundIndex, 0, 6)].Describe()</span>
         <span class="ladder__round">Ronda @(RoundIndex + 1)/@RoundContract.Standard.Count</span>
     </div>
+
+    @if (CanPause)
+    {
+        <button class="ladder__pause" @onclick="OnPause" aria-label="Pausar la partida" title="Pausar">
+            <span class="pause-glyph" aria-hidden="true"></span>
+        </button>
+    }
 </div>
 
 @code {
     [Parameter] public int RoundIndex { get; set; }
 
     [Parameter, EditorRequired] public GameOptions Options { get; set; } = default!;
+
+    [Parameter] public bool CanPause { get; set; }
+
+    [Parameter] public EventCallback OnPause { get; set; }
 }

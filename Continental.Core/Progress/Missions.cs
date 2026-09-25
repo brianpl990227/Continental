@@ -31,11 +31,11 @@ public sealed record Mission(
 
 public static class MissionCatalog
 {
-    public const int DailyBonusXp = 150;
+    public const int DailyBonusXp = 75;
     public const int DailyRerolls = 1;
 
     private static readonly string[] Numerals = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
-    private static readonly int[] TierXp = [25, 60, 120, 220, 400, 700, 1000, 1400, 1900, 2500];
+    private static readonly int[] TierXp = [5, 15, 30, 60, 100, 150, 210, 280, 360, 450];
 
     public static IReadOnlyList<Mission> Achievements { get; }
 
@@ -284,26 +284,49 @@ public static class MissionCatalog
 
         Tiered("lostabuela", "👵", rivales, "Nieto obediente", Stat.LostToAbuela, [1, 3, 5],
             n => $"Acaba por detrás de la abuela {Plural(n, "vez", "veces")}.");
+        Tiered("fivebots", "🦾", rivales, "Cazador de bots", Stat.WinsVsFiveBots, [2, 5, 10, 25, 50],
+            n => $"Gana {Plural(n, "partida", "partidas")} contra cinco bots.");
+
+        Tiered("lost", "🙃", partidas, "Se aprende perdiendo", Stat.GamesLost, [5, 25, 100, 250, 500, 1000],
+            n => $"Pierde {Plural(n, "partida", "partidas")} sin tirar la toalla.");
+        Tiered("hair", "🪒", partidas, "Al filo", Stat.WinsByHair, [2, 5, 10, 25],
+            n => $"Gana {Plural(n, "partida", "partidas")} por 5 puntos o menos.");
+        Tiered("fastwins", "⏱️", partidas, "Ganador exprés", Stat.FastWins, [2, 5, 10, 25, 50],
+            n => $"Gana {Plural(n, "partida", "partidas")} en 12 minutos o menos.");
+        Tiered("negwins", "🌀", partidas, "Números negros", Stat.WinsNegative, [2, 5, 10],
+            n => $"Gana {Plural(n, "partida", "partidas")} con puntuación negativa.");
+        Tiered("vsthree", "🥳", partidas, "Fiesta grande", Stat.WinsVsThreeHumans, [2, 5, 10, 25],
+            n => $"Gana {Plural(n, "partida", "partidas")} con tres personas más en la mesa.");
+        Tiered("threestart", "🏁", rondas, "Buen arranque", Stat.FirstThreeCloses, [2, 5, 10, 25],
+            n => $"Cierra las tres primeras rondas en {Plural(n, "partida", "partidas")}.");
+        Tiered("weekend", "🛋️", constancia, "Fin de semana", Stat.WeekendGames, [25, 50, 100, 250, 500],
+            n => $"Juega {n} partidas en fin de semana.");
+        Tiered("night", "🦉", constancia, "Trasnochador", Stat.NightGames, [3, 10, 50, 100],
+            n => $"Termina {Plural(n, "partida", "partidas")} entre la 1 y las 5 de la madrugada.");
+        Tiered("morning", "🐓", constancia, "Tempranero", Stat.MorningGames, [3, 10, 25, 50, 100],
+            n => $"Termina {Plural(n, "partida", "partidas")} entre las 5 y las 8 de la mañana.");
+        Tiered("marathons", "🏃", constancia, "Fondista", Stat.MarathonGames, [2, 5, 10, 25],
+            n => $"Juega {Plural(n, "partida", "partidas")} de una hora o más.");
 
         return list;
     }
 
     private static List<Mission> BuildSecrets()
     {
-        Mission Secret(string id, string icon, string title, string detail, Stat stat, int target = 1, int xp = 500)
+        Mission Secret(string id, string icon, string title, string detail, Stat stat, int target = 1, int xp = 75)
             => new($"sec.{id}", MissionScope.Secret, stat, target, title, detail, xp, icon, "Secretas", Difficulty.Hard);
 
         return
         [
-            Secret("negative", "🌀", "Magia negra", "Gana una partida con puntuación negativa.", Stat.WinsNegative, xp: 1500),
+            Secret("negative", "🌀", "Magia negra", "Gana una partida con puntuación negativa.", Stat.WinsNegative, xp: 150),
             Secret("hair", "🪒", "Por los pelos", "Gana por 5 puntos o menos.", Stat.WinsByHair),
             Secret("tie", "🤝", "Empate técnico", "Comparte el primer puesto con otro jugador.", Stat.TiedWins),
-            Secret("miracle", "🙏", "Milagro", "Gana yendo último tras la sexta ronda.", Stat.MiracleWins, xp: 1000),
-            Secret("party", "🎉", "Que empiece la fiesta", "Cierra la primera ronda en tu primer turno.", Stat.FirstRoundFirstTurnCloses, xp: 800),
-            Secret("royal", "👑", "Escalera real", "Bájate y cierra de golpe la ronda de tres escaleras.", Stat.EeeSameTurnCloses, xp: 1000),
+            Secret("miracle", "🙏", "Milagro", "Gana yendo último tras la sexta ronda.", Stat.MiracleWins, xp: 120),
+            Secret("party", "🎉", "Que empiece la fiesta", "Cierra la primera ronda en tu primer turno.", Stat.FirstRoundFirstTurnCloses, xp: 100),
+            Secret("royal", "👑", "Escalera real", "Bájate y cierra de golpe la ronda de tres escaleras.", Stat.EeeSameTurnCloses, xp: 120),
             Secret("magician", "🪄", "Mago", "Canjea dos comodines en la misma ronda.", Stat.MaxSwapsInRound, 2),
-            Secret("tourist", "🧳", "Turista", "Termina una partida sin haberte bajado ni una vez.", Stat.TouristGames, xp: 300),
-            Secret("huge", "🎒", "Mochilero", "Termina una partida con 500 puntos o más.", Stat.HugeLosses, xp: 300),
+            Secret("tourist", "🧳", "Turista", "Termina una partida sin haberte bajado ni una vez.", Stat.TouristGames, xp: 50),
+            Secret("huge", "🎒", "Mochilero", "Termina una partida con 500 puntos o más.", Stat.HugeLosses, xp: 50),
             Secret("terminator", "🦾", "Exterminador", "Gana una partida contra cinco bots.", Stat.WinsVsFiveBots),
             Secret("fast", "⏱️", "Exprés", "Gana una partida en 12 minutos o menos.", Stat.FastWins),
             Secret("marathon", "🏃", "Maratón", "Juega una partida de una hora o más.", Stat.MarathonGames),
@@ -312,31 +335,37 @@ public static class MissionCatalog
             Secret("sunday", "🛋️", "Dominguero", "Juega 10 partidas en fin de semana.", Stat.WeekendGames, 10),
             Secret("elders", "👵", "Respeta a tus mayores", "Acaba por detrás de la abuela 10 veces.", Stat.LostToAbuela, 10),
             Secret("addict", "🌙", "Una más y lo dejo", "Juega 10 partidas en un mismo día.", Stat.MaxGamesInDay, 10),
-            Secret("resilient", "🧱", "Resiliente", "Encadena 5 derrotas seguidas. Y sigue jugando.", Stat.BestLossStreak, 5, 300),
-            Secret("seven", "7️⃣", "Pleno", "Cierra las siete rondas de una partida.", Stat.MaxClosesInGame, 7, 2000),
+            Secret("resilient", "🧱", "Resiliente", "Encadena 5 derrotas seguidas. Y sigue jugando.", Stat.BestLossStreak, 5, 50),
+            Secret("seven", "7️⃣", "Pleno", "Cierra las siete rondas de una partida.", Stat.MaxClosesInGame, 7, 200),
             Secret("hoarder", "🧲", "Aspiradora", "Roba de contra 10 veces en una partida.", Stat.MaxStealsInGame, 10),
-            Secret("tower", "🗼", "Torre", "Ten una escalera tuya de 14 cartas.", Stat.LongestEscalera, 14, 1500),
-            Secret("untouchable", "👻", "Intocable", "Acaba las siete rondas de una partida con 0 puntos o menos.", Stat.UntouchableGames, xp: 3000),
-            Secret("party3", "🥳", "Fiesta", "Gana una partida con tres personas más en la mesa.", Stat.WinsVsThreeHumans, xp: 800),
-            Secret("almost", "😬", "Casi", "Pierde por 5 puntos o menos.", Stat.LostByHair, xp: 300),
-            Secret("hundred", "💯", "Cien redondos", "Termina una partida con exactamente 100 puntos.", Stat.ExactHundredGames, xp: 400),
-            Secret("zero", "⭕", "Cero absoluto", "Termina una partida con exactamente 0 puntos.", Stat.ZeroGames, xp: 1200),
-            Secret("threestart", "🏁", "Salida lanzada", "Cierra las tres primeras rondas de una partida.", Stat.FirstThreeCloses, xp: 1000),
-            Secret("twoflash", "🌩️", "Doble relámpago", "Cierra dos rondas en tu primer turno en una misma partida.", Stat.MaxFirstTurnInGame, 2, 1200),
-            Secret("hattrick", "🎩", "Tres de golpe", "Bájate y cierra de golpe tres veces en una partida.", Stat.MaxSameTurnInGame, 3, 1200),
-            Secret("nopozo", "🙅", "Ni lo mires", "Gana sin tomar ni una carta del pozo.", Stat.NoDiscardWins, xp: 400),
-            Secret("marathoner", "🏃", "Ultramaratón", "Juega 60 horas en total.", Stat.MinutesPlayed, 3600, 1500),
-            Secret("longstreak", "🔥", "Imparable", "Gana 12 partidas seguidas.", Stat.BestWinStreak, 12, 3000),
-            Secret("collector", "🧺", "Completista", "Consigue 250 logros.", Stat.AchievementsCompleted, 250, 2500),
-            Secret("chatter", "📣", "Megáfono", "Escribe 2000 mensajes en el chat.", Stat.ChatMessages, 2000, 800),
-            Secret("hundreds", "💯", "Centenario", "Termina 100 partidas con otras personas en la mesa.", Stat.GamesVsHumans, 100, 800)
+            Secret("tower", "🗼", "Torre", "Ten una escalera tuya de 14 cartas.", Stat.LongestEscalera, 14, 150),
+            Secret("untouchable", "👻", "Intocable", "Acaba las siete rondas de una partida con 0 puntos o menos.", Stat.UntouchableGames, xp: 300),
+            Secret("party3", "🥳", "Fiesta", "Gana una partida con tres personas más en la mesa.", Stat.WinsVsThreeHumans, xp: 100),
+            Secret("almost", "😬", "Casi", "Pierde por 5 puntos o menos.", Stat.LostByHair, xp: 50),
+            Secret("hundred", "💯", "Cien redondos", "Termina una partida con exactamente 100 puntos.", Stat.ExactHundredGames, xp: 60),
+            Secret("zero", "⭕", "Cero absoluto", "Termina una partida con exactamente 0 puntos.", Stat.ZeroGames, xp: 150),
+            Secret("threestart", "🏁", "Salida lanzada", "Cierra las tres primeras rondas de una partida.", Stat.FirstThreeCloses, xp: 120),
+            Secret("twoflash", "🌩️", "Doble relámpago", "Cierra dos rondas en tu primer turno en una misma partida.", Stat.MaxFirstTurnInGame, 2, 150),
+            Secret("hattrick", "🎩", "Tres de golpe", "Bájate y cierra de golpe tres veces en una partida.", Stat.MaxSameTurnInGame, 3, 150),
+            Secret("nopozo", "🙅", "Ni lo mires", "Gana sin tomar ni una carta del pozo.", Stat.NoDiscardWins, xp: 60),
+            Secret("marathoner", "🏃", "Ultramaratón", "Juega 60 horas en total.", Stat.MinutesPlayed, 3600, 150),
+            Secret("longstreak", "🔥", "Imparable", "Gana 12 partidas seguidas.", Stat.BestWinStreak, 12, 300),
+            Secret("collector", "🧺", "Completista", "Consigue 250 logros.", Stat.AchievementsCompleted, 250, 250),
+            Secret("chatter", "📣", "Megáfono", "Escribe 2000 mensajes en el chat.", Stat.ChatMessages, 2000, 100),
+            Secret("hundreds", "💯", "Centenario", "Termina 100 partidas con otras personas en la mesa.", Stat.GamesVsHumans, 100, 100),
+            Secret("archmage", "🧙", "Archimago", "Canjea tres comodines en la misma ronda.", Stat.MaxSwapsInRound, 3, 150),
+            Secret("rock", "🪨", "Roca", "Encadena 10 derrotas seguidas. Y sigue jugando.", Stat.BestLossStreak, 10, 75),
+            Secret("siblings", "👯", "Hermanos de mesa", "Comparte el primer puesto 3 veces.", Stat.TiedWins, 3, 120),
+            Secret("storm", "🌪️", "Huracán", "Cierra cinco rondas en tu primer turno en total.", Stat.FirstTurnCloses, 5, 120),
+            Secret("wall", "🧱", "Muralla", "Coloca 20 cartas en juegos de la mesa en una misma partida.", Stat.MaxExtensionsInGame, 20, 100),
+            Secret("insomnia", "🌌", "Insomne", "Termina 25 partidas entre la 1 y las 5 de la madrugada.", Stat.NightGames, 25, 100)
         ];
     }
 
     private static List<Mission> BuildDaily()
     {
         var list = new List<Mission>();
-        int[] xp = [50, 80, 120];
+        int[] xp = [30, 50, 75];
 
         void Add(string id, string icon, Difficulty difficulty, Stat stat, int target, string title, string detail)
             => list.Add(new Mission($"day.{id}", MissionScope.Daily, stat, target, title, detail, xp[(int)difficulty], icon, "Diarias", difficulty));
@@ -440,6 +469,17 @@ public static class MissionCatalog
         Add("rounds21", "🔁", h, Stat.RoundsPlayed, 21, "Tres partidas de rondas", "Juega 21 rondas.");
         Add("big1", "🎒", e, Stat.BigRounds, 1, "Mochila llena", "Suma 100 puntos o más en una ronda. Pasa.");
         Add("fullhand1", "🙈", e, Stat.FullHandRounds, 1, "Mano entera", "Termina una ronda sin haberte bajado.");
+        Add("hair1", "🪒", h, Stat.WinsByHair, 1, "Al límite", "Gana por 5 puntos o menos.");
+        Add("under50", "❄️", h, Stat.WinsUnder50, 1, "Bajo cero", "Gana con 50 puntos o menos.");
+        Add("by100", "🚀", h, Stat.WinsBy100, 1, "Paliza", "Gana sacando 100 puntos o más al segundo.");
+        Add("firstturn1", "⚡", h, Stat.FirstTurnCloses, 1, "Relámpago", "Cierra una ronda en tu primer turno.");
+        Add("swapgame2", "🎩", h, Stat.MaxSwapsInGame, 2, "Prestidigitador", "Canjea 2 comodines en una misma partida.");
+        Add("nojokers", "🐎", h, Stat.WinsWithoutJokers, 1, "Pura sangre", "Gana sin bajar ni canjear comodines.");
+        Add("nodiscard", "🚫", h, Stat.NoDiscardWins, 1, "Ni lo mires", "Gana sin tomar ninguna carta del pozo.");
+        Add("extendgame8", "🧱", h, Stat.MaxExtensionsInGame, 8, "Albañil de una tarde", "Coloca 8 cartas en juegos de la mesa en una misma partida.");
+        Add("chat10", "💬", m, Stat.ChatMessages, 10, "Tertuliano", "Escribe 10 mensajes en el chat.");
+        Add("turns90", "🔂", h, Stat.Turns, 90, "Noventa turnos", "Juega 90 turnos.");
+        Add("minutes90", "⏳", h, Stat.MinutesPlayed, 90, "Tarde entera", "Juega 90 minutos.");
 
         (string Id, string To, string Of, Stat Stat)[] voices =
         [
@@ -460,7 +500,7 @@ public static class MissionCatalog
     private static List<Mission> BuildWeekly()
     {
         var list = new List<Mission>();
-        int[] xp = [300, 450, 650];
+        int[] xp = [150, 225, 325];
 
         void Add(string id, string icon, Difficulty difficulty, Stat stat, int target, string title, string detail)
             => list.Add(new Mission($"week.{id}", MissionScope.Weekly, stat, target, title, detail, xp[(int)difficulty], icon, "Semanales", difficulty));
@@ -545,6 +585,16 @@ public static class MissionCatalog
         Add("negative5", "➖", h, Stat.CleanSweepRounds, 5, "Números rojos", "Acaba 5 rondas con puntos negativos.");
         Add("sets1", "🌞", e, Stat.DailySetsCompleted, 1, "Un día redondo", "Completa las tres diarias en un día.");
         Add("voices2", "🗺️", m, Stat.DistinctVoicesBeaten, 2, "Gira corta", "Gánale a 2 personalidades de bot distintas.");
+        Add("hair3", "🪒", h, Stat.WinsByHair, 3, "Tres sustos", "Gana 3 partidas por 5 puntos o menos.");
+        Add("under50x2", "❄️", h, Stat.WinsUnder50, 2, "Doble bajo cero", "Gana 2 partidas con 50 puntos o menos.");
+        Add("by100x3", "🚀", h, Stat.WinsBy100, 3, "Tres palizas", "Gana 3 partidas sacando 100 puntos o más al segundo.");
+        Add("nosteal5", "😇", m, Stat.WinsWithoutSteal, 5, "Semana limpia", "Gana 5 partidas sin robar de contra.");
+        Add("jokers30", "🃏", h, Stat.JokersLaid, 30, "Comodinero mayor", "Baja 30 comodines en tus juegos.");
+        Add("days7", "📅", h, Stat.DaysPlayed, 7, "Todos los días", "Juega los siete días de la semana.");
+        Add("rounds70", "🔁", m, Stat.RoundsPlayed, 70, "Setenta rondas", "Juega 70 rondas.");
+        Add("first5", "⚡", h, Stat.FirstTurnCloses, 5, "Tormenta eléctrica", "Cierra 5 rondas en tu primer turno.");
+        Add("alldownwin2", "🏅", h, Stat.AllDownWins, 2, "Puntualidad premiada", "Gana 2 partidas bajándote en las siete rondas.");
+        Add("podiumhumans3", "🎖️", m, Stat.PodiumsVsHumans, 3, "Podio con amigos", "Acaba 3 veces entre los dos primeros con otras personas en la mesa.");
 
         return list;
     }

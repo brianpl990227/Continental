@@ -213,6 +213,10 @@ public sealed class GameState
 
     public int ChatSeq { get; set; }
 
+    public bool Paused { get; set; }
+
+    public DateTimeOffset? PausedAt { get; set; }
+
     public RoundContract Contract => RoundContract.Standard[Math.Clamp(RoundIndex, 0, RoundContract.Standard.Count - 1)];
 
     public int TotalRounds => RoundContract.Standard.Count;
@@ -225,6 +229,11 @@ public sealed class GameState
     public Card? DiscardTop => Discard.Count > 0 ? Discard[^1] : null;
 
     public PlayerState? Find(string playerId) => Players.FirstOrDefault(p => p.Id == playerId);
+
+    public bool CanPause(string playerId)
+        => Phase is GamePhase.Draw or GamePhase.StealWindow or GamePhase.Action
+           && Find(playerId) is { IsBot: false }
+           && Players.All(p => p.IsBot || p.Id == playerId);
 
     public void Say(string message)
     {

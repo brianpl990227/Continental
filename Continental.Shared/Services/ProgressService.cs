@@ -112,6 +112,9 @@ public sealed class ProgressService(IProfileStorage storage, IJSRuntime js) : IA
                     Profile = PlayerProfile.Create(DateTimeOffset.Now);
                 }
 
+                if (ProgressEngine.Migrate(Profile))
+                    _dirty = true;
+
                 if (ProgressEngine.Roll(Profile, DateTimeOffset.Now))
                     _dirty = true;
             }

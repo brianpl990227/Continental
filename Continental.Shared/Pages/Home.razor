@@ -169,10 +169,39 @@
     </div>
 </div>
 
+@if (Saved is { } saved)
+{
+    <div class="prompt" role="alertdialog" aria-modal="true" aria-labelledby="resume-title">
+        <div class="prompt__box">
+            <div class="prompt__fan" aria-hidden="true">
+                @for (var i = 0; i < 3; i++)
+                {
+                    <CardView Card="HeroCards[i + 1]" FaceDown="@(i != 1)" Style="@($"--i:{i}")" />
+                }
+            </div>
+            <h2 id="resume-title" class="prompt__title">Estabas en medio de una partida</h2>
+            <p class="prompt__text">¿Quieres continuar?</p>
+            <div class="prompt__meta">
+                <span class="prompt__room">@saved.RoomName</span>
+                <span>Ronda @(saved.RoundIndex + 1) de @saved.TotalRounds · contra @string.Join(", ", saved.Rivals)</span>
+                @if (!saved.OnlyBots)
+                {
+                    <span class="prompt__hint">Los demás jugadores tendrán que volver a entrar en la sala.</span>
+                }
+            </div>
+            <div class="prompt__actions">
+                <button class="btn btn--grow" disabled="@(Busy is not null)" @onclick="DeclineSaved">No</button>
+                <button class="btn btn--grow btn--primary" disabled="@(Busy is not null)" @onclick="ResumeSaved">Sí, continuar</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private string Manual = "";
     private string? Busy;
     private string? Error;
+    private SavedGame? Saved;
 
     private bool HasName => !string.IsNullOrWhiteSpace(App.PlayerName);
 
@@ -204,6 +233,9 @@
         await App.LoadAsync();
         await Progress.LoadAsync();
         Progress.Refresh();
+        if (!Host.IsRunning && App.Client is null)
+            Saved = await Host.FindSavedAsync();
+
         await Discovery.StartAsync();
 
         if (Updates.Installable)
@@ -239,6 +271,43 @@
             Error = $"No se pudo crear la sala: {ex.Message}";
             Busy = null;
         }
+    }
+
+    private async Task ResumeSaved()
+    {
+        Error = null;
+        Busy = "Recuperando la partida…";
+        StateHasChanged();
+
+        try
+        {
+            var client = await Host.ResumeSavedAsync();
+
+            Saved = null;
+
+            if (client is null)
+            {
+                Error = "No se pudo recuperar la partida guardada.";
+                Busy = null;
+                return;
+            }
+
+            App.ForgetSeat();
+            App.SetClient(client);
+            Nav.NavigateTo("/room");
+        }
+        catch (Exception ex)
+        {
+            Saved = null;
+            Error = $"No se pudo recuperar la partida: {ex.Message}";
+            Busy = null;
+        }
+    }
+
+    private async Task DeclineSaved()
+    {
+        Saved = null;
+        await Host.ForgetSavedAsync();
     }
 
     private async Task JoinManual()

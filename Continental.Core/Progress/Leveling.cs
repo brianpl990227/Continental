@@ -12,19 +12,34 @@ public static class Leveling
     public static readonly IReadOnlyList<LevelRank> Ranks =
     [
         new(1, "Novato", "wood"),
+        new(3, "Principiante", "wood"),
         new(5, "Aprendiz", "bronze"),
+        new(8, "Aficionado", "bronze"),
         new(10, "Jugador de peña", "bronze"),
         new(15, "Experto", "silver"),
         new(20, "Crupier", "silver"),
+        new(25, "Tahúr", "silver"),
         new(30, "Veterano", "gold"),
+        new(35, "Profesional", "gold"),
         new(40, "Maestro", "gold"),
+        new(45, "Estrella de la mesa", "gold"),
         new(50, "Gran maestro", "platinum"),
+        new(57, "Élite", "platinum"),
         new(65, "Leyenda", "diamond"),
+        new(72, "Virtuoso", "diamond"),
         new(80, "Mito", "diamond"),
-        new(100, "Inmortal del Continental", "mythic")
+        new(90, "Titán", "diamond"),
+        new(100, "Inmortal del Continental", "mythic"),
+        new(120, "Semidiós", "mythic"),
+        new(150, "El Continental", "mythic")
     ];
 
-    public static int CostOf(int level) => 150 + 50 * (Math.Max(1, level) - 1);
+    public static int CostOf(int level)
+    {
+        var step = Math.Max(1, level) - 1;
+
+        return 300 + 40 * step + step * step;
+    }
 
     public static int TotalFor(int level)
     {

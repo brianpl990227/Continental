@@ -68,7 +68,7 @@ public sealed class RivalRecord
 
 public sealed class PlayerProfile
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
     public const int HistoryLimit = 40;
     public const int RivalLimit = 40;
 

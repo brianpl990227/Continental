@@ -45,7 +45,22 @@ public interface IGameHost
     Task<IGameClient> StartAsync(string roomName, string playerName, GameOptions options);
 
     Task StopAsync();
+
+    Task<SavedGame?> FindSavedAsync();
+
+    Task<IGameClient?> ResumeSavedAsync();
+
+    Task ForgetSavedAsync();
+
+    void SaveNow();
 }
+
+public sealed record SavedGame(
+    string RoomName,
+    int RoundIndex,
+    int TotalRounds,
+    IReadOnlyList<string> Rivals,
+    bool OnlyBots);
 
 public interface IRoomDiscovery
 {

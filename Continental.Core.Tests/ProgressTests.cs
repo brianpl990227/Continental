@@ -151,8 +151,24 @@ public class LevelingTests
     {
         Assert.Equal("Novato", Leveling.RankFor(1).Name);
         Assert.Equal("Experto", Leveling.RankFor(17).Name);
-        Assert.Equal("Inmortal del Continental", Leveling.RankFor(140).Name);
+        Assert.Equal("Inmortal del Continental", Leveling.RankFor(110).Name);
+        Assert.Equal("Semidiós", Leveling.RankFor(140).Name);
+        Assert.Equal("El Continental", Leveling.RankFor(400).Name);
     }
+
+    [Fact]
+    public void Every_rank_has_its_own_title()
+    {
+        foreach (var rank in Leveling.Ranks)
+            Assert.Contains(Cosmetics.OfKind(CosmeticKind.Title), t => t.Name == rank.Name && t.Level == rank.From);
+    }
+
+    [Theory]
+    [InlineData(10, 4000, 5000)]
+    [InlineData(20, 13000, 16000)]
+    [InlineData(50, 90000, 110000)]
+    public void Reaching_high_levels_takes_a_long_time(int level, int min, int max)
+        => Assert.InRange(Leveling.TotalFor(level), min, max);
 }
 
 public class ProgressEngineTests
@@ -250,6 +266,62 @@ public class ProgressEngineTests
         Assert.Equal(GamePhase.GameOver, sim.State.Phase);
         return reports;
     }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void A_first_game_does_not_rocket_a_new_player_up_the_ladder(int seed)
+    {
+        var profile = PlayerProfile.Create(Noon);
+        var reports = Play(NewTable(seed * 97, ["Ana", "Chelo", "Marta"]), profile, "ana", Noon);
+
+        Assert.True(profile.Level <= 4, $"Nivel {profile.Level} tras una sola partida");
+
+        var fromMissions = reports.Sum(r => r.Missions.Sum(m => m.Xp)) + reports.Count(r => r.DailyBonus) * MissionCatalog.DailyBonusXp;
+        Assert.True(fromMissions < 1200, $"Las misiones dieron {fromMissions} XP en una partida");
+    }
+
+    [Fact]
+    public void Old_profiles_are_recalculated_with_the_new_rewards()
+    {
+        var profile = PlayerProfile.Create(Noon);
+        profile.Version = 1;
+        profile.Xp = 6000;
+        profile.Lifetime.Add(Stat.GamesPlayed, 2);
+        profile.Lifetime.Add(Stat.GamesWon, 1);
+        profile.Lifetime.Add(Stat.RoundsClosed, 5);
+        profile.Lifetime.Add(Stat.RoundsLaidDown, 10);
+        profile.Achievements.AddRange(["ach.played.1", "ach.won.1", "sec.royal"]);
+
+        Assert.True(ProgressEngine.Migrate(profile));
+
+        var expected = 2 * 40 + 80 + 5 * 15 + 10 * 5
+                       + MissionCatalog.Find("ach.played.1")!.Xp + MissionCatalog.Find("ach.won.1")!.Xp + MissionCatalog.Find("sec.royal")!.Xp;
+
+        Assert.Equal(expected, profile.Xp);
+        Assert.Equal(PlayerProfile.CurrentVersion, profile.Version);
+        Assert.False(ProgressEngine.Migrate(profile));
+    }
+
+    [Fact]
+    public void Migration_never_gives_extra_xp()
+    {
+        var profile = PlayerProfile.Create(Noon);
+        profile.Version = 1;
+        profile.Xp = 10;
+        profile.Lifetime.Add(Stat.GamesPlayed, 50);
+
+        ProgressEngine.Migrate(profile);
+
+        Assert.Equal(10, profile.Xp);
+    }
+
+    [Fact]
+    public void New_profiles_are_already_on_the_current_rules()
+        => Assert.False(ProgressEngine.Migrate(PlayerProfile.Create(Noon)));
 
     [Fact]
     public void A_whole_game_is_recorded_once_with_consistent_numbers()

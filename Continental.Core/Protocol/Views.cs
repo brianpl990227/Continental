@@ -82,6 +82,10 @@ public sealed record PlayerView
 
     public bool YouAreHost { get; init; }
 
+    public bool Paused { get; init; }
+
+    public bool CanPause { get; init; }
+
     public static PlayerView For(GameState state, string playerId)
     {
         var me = state.Find(playerId);
@@ -101,7 +105,8 @@ public sealed record PlayerView
                            && me.Id != offer.BlockedPlayerId
                            && me.Id != offer.DiscarderId;
 
-            var seconds = (int)Math.Max(0, Math.Ceiling((offer.Deadline - DateTimeOffset.UtcNow).TotalSeconds));
+            var clock = state.Paused && state.PausedAt is { } pausedAt ? pausedAt : DateTimeOffset.UtcNow;
+            var seconds = (int)Math.Max(0, Math.Ceiling((offer.Deadline - clock).TotalSeconds));
             steal = new StealView(offer.Card, offer.BlockedPlayerId, seconds, eligible);
         }
 
@@ -135,7 +140,9 @@ public sealed record PlayerView
             Typing = state.TypingIds.Select(id => state.Find(id)?.Name).OfType<string>().ToList(),
             YourTurn = current?.Id == playerId,
             CanLayDown = canLayDown,
-            YouAreHost = me?.IsHost ?? false
+            YouAreHost = me?.IsHost ?? false,
+            Paused = state.Paused,
+            CanPause = state.CanPause(playerId)
         };
     }
 }

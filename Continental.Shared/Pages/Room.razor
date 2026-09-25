@@ -154,7 +154,8 @@ else if (View.Phase == GamePhase.Lobby)
 else
 {
     <div class="table">
-        <RoundLadder RoundIndex="View.RoundIndex" Options="View.Options" />
+        <RoundLadder RoundIndex="View.RoundIndex" Options="View.Options"
+                     CanPause="@(View.CanPause && !View.Paused && !ShowIntro)" OnPause="PauseGame" />
 
         @if (ShowIntro)
         {
@@ -431,6 +432,29 @@ else
                           AdvanceLabel="Jugar otra vez" />
         }
 
+        @if (View.Paused)
+        {
+            <div class="prompt prompt--pause" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+                <div class="prompt__box">
+                    <span class="pause-glyph pause-glyph--big" aria-hidden="true"></span>
+                    <h2 id="pause-title" class="prompt__title">Partida en pausa</h2>
+                    <p class="prompt__text">Los bots esperan a que vuelvas. Ronda @(View.RoundIndex + 1) de @View.TotalRounds · @View.ContractText</p>
+                    <div class="prompt__stack">
+                        <button class="btn btn--primary" @onclick="ResumeGame">Continuar</button>
+                        @if (ConfirmLeave)
+                        {
+                            <button class="btn btn--danger" @onclick="Leave">Sí, abandonar la partida</button>
+                            <button class="btn btn--ghost" @onclick="@(() => ConfirmLeave = false)">Mejor no</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn--ghost" @onclick="@(() => ConfirmLeave = true)">Abandonar la partida</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
         @if (ShowChat)
         {
             <div class="chat" role="dialog" aria-label="Charla de la mesa">
@@ -485,7 +509,7 @@ else
     </div>
 }
 
-<Celebrations Paused="@(ShowIntro || ShowFinale)" />
+<Celebrations Paused="@(ShowIntro || ShowFinale || View?.Paused == true)" />
 
 @if (View is not null && ShowRules)
 {
@@ -535,6 +559,7 @@ else
     private bool SawLobby;
     private bool ShowIntro;
     private bool ShowFinale;
+    private bool ConfirmLeave;
     private int? RoundCard;
     private string? LastErrorHeard;
 
@@ -617,6 +642,24 @@ else
                 : "Puntuaciones";
 
     private Task NextRound() => Send(new ClientMessage { Type = MessageType.NextRound });
+
+    private Task PauseGame()
+    {
+        ShowChat = false;
+        Choosing = null;
+        ConfirmLeave = false;
+        Audio.Play(Sfx.Tap);
+
+        return Send(new ClientMessage { Type = MessageType.Pause });
+    }
+
+    private Task ResumeGame()
+    {
+        ConfirmLeave = false;
+        Audio.Play(Sfx.Tap);
+
+        return Send(new ClientMessage { Type = MessageType.Resume });
+    }
 
     private Task PlayAgain() => Send(new ClientMessage { Type = MessageType.PlayAgain });
 

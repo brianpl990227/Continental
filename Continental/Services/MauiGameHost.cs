@@ -12,6 +12,7 @@ public sealed class MauiGameHost : IGameHost
     private const int DefaultPort = 8080;
     private const string HostPlayerId = "host";
 
+    private readonly SemaphoreSlim _disk = new(1, 1);
     private GameServer? _server;
     private RoomAnnouncer? _announcer;
 
@@ -23,6 +24,8 @@ public sealed class MauiGameHost : IGameHost
 
     public GameRoom? Room { get; private set; }
 
+    private static string SavePath => Path.Combine(FileSystem.AppDataDirectory, "savedgame.json");
+
     public async Task<IGameClient> StartAsync(string roomName, string playerName, GameOptions options)
     {
         await StopAsync();
@@ -30,6 +33,78 @@ public sealed class MauiGameHost : IGameHost
         var room = new GameRoom(Guid.NewGuid().ToString("N")[..8], roomName, options);
         room.AddHumanPlayer(HostPlayerId, playerName, isHost: true);
 
+        await LaunchAsync(room);
+
+        return new LocalGameClient(room, HostPlayerId);
+    }
+
+    public async Task<SavedGame?> FindSavedAsync()
+    {
+        if (await ReadSavedAsync() is not { } state)
+            return null;
+
+        var rivals = state.Players.Where(p => !p.IsHost).OrderBy(p => p.Seat).ToList();
+
+        return new SavedGame(
+            state.RoomName,
+            state.RoundIndex,
+            state.TotalRounds,
+            rivals.Select(p => p.Name).ToList(),
+            rivals.All(p => p.IsBot));
+    }
+
+    public async Task<IGameClient?> ResumeSavedAsync()
+    {
+        if (await ReadSavedAsync() is not { } state)
+            return null;
+
+        await StopAsync();
+
+        var room = GameRoom.Restore(state);
+
+        await LaunchAsync(room);
+
+        return new LocalGameClient(room, state.Players.First(p => p.IsHost).Id);
+    }
+
+    public async Task ForgetSavedAsync()
+    {
+        await _disk.WaitAsync().ConfigureAwait(false);
+
+        try
+        {
+            File.Delete(SavePath);
+        }
+        catch (Exception)
+        {
+        }
+        finally
+        {
+            _disk.Release();
+        }
+    }
+
+    public void SaveNow()
+    {
+        if (Room is not { } room || !_disk.Wait(TimeSpan.FromSeconds(2)))
+            return;
+
+        try
+        {
+            if (ReferenceEquals(Room, room) && room.TryCapture(TimeSpan.FromSeconds(1), out var snapshot))
+                Persist(snapshot);
+        }
+        catch (Exception)
+        {
+        }
+        finally
+        {
+            _disk.Release();
+        }
+    }
+
+    private async Task LaunchAsync(GameRoom room)
+    {
         var webRoot = await PrepareWebClientAsync();
         var server = new GameServer(room, webRoot);
 
@@ -46,7 +121,7 @@ public sealed class MauiGameHost : IGameHost
         {
             RoomId = room.State.RoomId,
             RoomName = room.State.RoomName,
-            HostName = playerName,
+            HostName = room.State.Players.FirstOrDefault(p => p.IsHost)?.Name ?? "",
             Address = address ?? "",
             Port = server.Port,
             Players = room.State.Players.Count,
@@ -55,12 +130,12 @@ public sealed class MauiGameHost : IGameHost
             Ruleset = room.State.Options.DisplayName,
             StartingCards = room.State.Options.StartingCards
         });
-
-        return new LocalGameClient(room, HostPlayerId);
     }
 
     public async Task StopAsync()
     {
+        var room = Room;
+
         if (_announcer is not null)
         {
             await _announcer.DisposeAsync();
@@ -76,6 +151,50 @@ public sealed class MauiGameHost : IGameHost
         Room = null;
         JoinUrl = null;
         WebClientReady = false;
+
+        if (room is not null)
+            await ForgetSavedAsync();
+    }
+
+    private async Task<GameState?> ReadSavedAsync()
+    {
+        await _disk.WaitAsync().ConfigureAwait(false);
+
+        try
+        {
+            if (!File.Exists(SavePath))
+                return null;
+
+            var state = GameSnapshot.Read(await File.ReadAllTextAsync(SavePath).ConfigureAwait(false));
+
+            if (state is null)
+                File.Delete(SavePath);
+
+            return state;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+        finally
+        {
+            _disk.Release();
+        }
+    }
+
+    private static void Persist(string? snapshot)
+    {
+        if (snapshot is null)
+        {
+            File.Delete(SavePath);
+            return;
+        }
+
+        Directory.CreateDirectory(FileSystem.AppDataDirectory);
+
+        var temp = SavePath + ".tmp";
+        File.WriteAllText(temp, snapshot);
+        File.Move(temp, SavePath, overwrite: true);
     }
 
     private async Task<string> PrepareWebClientAsync()

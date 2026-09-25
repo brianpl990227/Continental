@@ -24,6 +24,8 @@ public static class MessageType
     public const string Leave = "leave";
     public const string Chat = "chat";
     public const string Badge = "badge";
+    public const string Pause = "pause";
+    public const string Resume = "resume";
 
     public const string Ping = "ping";
 
