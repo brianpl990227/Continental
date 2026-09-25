@@ -189,6 +189,105 @@ function launch(target, targetSelector, fromLeft, fromTop, fromWidth, fromHeight
     }
 }
 
+export function flyToSeat(pileSelector, cloneSelector, seatSelector, faceUp, delay) {
+    try {
+        if (reducedMotion()) return;
+
+        const pile = document.querySelector(pileSelector);
+        const seat = document.querySelector(seatSelector);
+
+        if (!pile || !seat) return;
+
+        const from = pile.getBoundingClientRect();
+
+        if (!(from.width > 0)) return;
+
+        const source = cloneSelector ? document.querySelector(cloneSelector) : null;
+        let ghost;
+
+        if (source) {
+            ghost = source.cloneNode(true);
+            ghost.removeAttribute('id');
+            ghost.removeAttribute('data-card-id');
+        } else {
+            ghost = document.createElement('div');
+            ghost.className = 'card card--facedown';
+            ghost.innerHTML = '<div class="card__back"></div>';
+        }
+
+        setTimeout(() => launchToSeat(ghost, from, seat, faceUp), Math.max(0, delay || 0));
+    } catch {
+
+    }
+}
+
+function launchToSeat(ghost, from, seat, faceUp) {
+    try {
+        if (!seat.isConnected) return;
+
+        const anchor = seat.querySelector('.seat__avatar') || seat;
+        const to = anchor.getBoundingClientRect();
+
+        if (!to.width) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = `fly-ghost fly-ghost--seat${faceUp ? ' fly-ghost--taken' : ''}`;
+        wrapper.style.left = `${from.left}px`;
+        wrapper.style.top = `${from.top}px`;
+        wrapper.style.width = `${from.width}px`;
+        wrapper.style.height = `${from.height}px`;
+
+        ghost.style.position = 'absolute';
+        ghost.style.inset = '0';
+        ghost.style.width = '100%';
+        ghost.style.height = '100%';
+        ghost.style.margin = '0';
+        ghost.style.transition = 'none';
+        ghost.style.animation = 'none';
+        ghost.style.visibility = 'visible';
+
+        wrapper.appendChild(ghost);
+        document.body.appendChild(wrapper);
+
+        const dx = to.left + to.width / 2 - (from.left + from.width / 2);
+        const dy = to.top + to.height / 2 - (from.top + from.height / 2);
+        const distance = Math.hypot(dx, dy);
+        const lift = Math.min(60, distance * 0.2);
+        const end = Math.max(0.18, to.width / from.width * 0.9);
+        const tilt = Math.max(-14, Math.min(14, dx * 0.04));
+        const duration = faceUp ? 820 : 520;
+
+        const frames = faceUp
+            ? [
+                { transform: 'translate(0, 0) scale(1) rotate(0deg)', opacity: 1 },
+                { transform: `translate(0, -14px) scale(1.18) rotate(0deg)`, opacity: 1, offset: 0.28 },
+                { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - lift}px) scale(0.72) rotate(${tilt * 0.5}deg)`, opacity: 1, offset: 0.64 },
+                { transform: `translate(${dx}px, ${dy}px) scale(${end}) rotate(${tilt}deg)`, opacity: 0 }
+            ]
+            : [
+                { transform: 'translate(0, 0) scale(1) rotate(0deg)', opacity: 1 },
+                { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - lift}px) scale(0.62) rotate(${tilt * 0.5}deg)`, opacity: 1, offset: 0.5 },
+                { transform: `translate(${dx}px, ${dy}px) scale(${end}) rotate(${tilt}deg)`, opacity: 0 }
+            ];
+
+        const travel = wrapper.animate(frames, { duration, easing: EASE, fill: 'forwards' });
+
+        const finish = () => {
+            wrapper.remove();
+
+            if (seat.isConnected) {
+                anchor.animate(
+                    [{ transform: 'scale(1)' }, { transform: 'scale(1.22)' }, { transform: 'scale(1)' }],
+                    { duration: 320, easing: 'cubic-bezier(0.3, 1.6, 0.5, 1)' });
+            }
+        };
+
+        travel.finished.then(finish, finish);
+    } catch {
+
+    }
+}
+
 function reveal(target) {
     const scroller = target.closest('.melds');
 

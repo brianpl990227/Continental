@@ -300,6 +300,33 @@ public class PauseTests
     }
 
     [Fact]
+    public async Task Bots_wait_until_every_human_has_finished_the_intro()
+    {
+        using var room = NewRoom(withGuest: true);
+        await StartAsync(room);
+
+        var state = room.State;
+        state.CurrentPlayerIndex = state.Players.FindIndex(p => p.IsBot);
+        state.Phase = GamePhase.Draw;
+
+        var bot = state.Current!;
+        var hand = bot.Hand.Count;
+        _ = room.RunAsync();
+
+        await Task.Delay(1500);
+        Assert.Equal(hand, bot.Hand.Count);
+
+        Assert.Null(await room.HandleAsync("host", new ClientMessage { Type = MessageType.IntroDone }));
+        await Task.Delay(1800);
+        Assert.Equal(hand, bot.Hand.Count);
+        Assert.Equal(GamePhase.Draw, state.Phase);
+
+        Assert.Null(await room.HandleAsync("guest", new ClientMessage { Type = MessageType.IntroDone }));
+        await Task.Delay(2200);
+        Assert.False(state.Phase == GamePhase.Draw && state.Current == bot);
+    }
+
+    [Fact]
     public void The_steal_countdown_freezes_during_a_pause()
     {
         var state = new GameState { RoomId = "t", RoomName = "Mesa", Options = GameOptions.ForPreset(RulePreset.LatinAmerica) };

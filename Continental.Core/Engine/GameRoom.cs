@@ -12,6 +12,10 @@ public sealed class GameRoom : IDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
 
+    private static readonly TimeSpan IntroTimeout = TimeSpan.FromSeconds(8);
+
+    private readonly HashSet<string> _watchingIntro = [];
+    private DateTimeOffset _introEndsAt = DateTimeOffset.MinValue;
     private DateTimeOffset _botReadyAt = DateTimeOffset.MinValue;
     private int _botCounter;
 
@@ -140,10 +144,21 @@ public sealed class GameRoom : IDisposable
                     : _engine.RemovePlayer(m.PlayerId);
 
             case MessageType.Start:
+            {
                 if (!isHost)
                     return ActionResult.Fail("Solo el anfitrión empieza la partida.");
 
-                return _engine.StartGame();
+                var started = _engine.StartGame();
+
+                if (started.Ok)
+                    HoldBotsForIntro();
+
+                return started;
+            }
+
+            case MessageType.IntroDone:
+                FinishIntro(playerId);
+                return ActionResult.Success;
 
             case MessageType.Draw:
                 return _engine.Draw(playerId, (DrawSource)(m.Source ?? 0));
@@ -208,6 +223,37 @@ public sealed class GameRoom : IDisposable
         }
     }
 
+    private void HoldBotsForIntro()
+    {
+        _watchingIntro.Clear();
+
+        foreach (var human in State.Players.Where(p => !p.IsBot && p.IsConnected))
+            _watchingIntro.Add(human.Id);
+
+        _introEndsAt = DateTimeOffset.UtcNow + IntroTimeout;
+    }
+
+    private void FinishIntro(string playerId)
+    {
+        if (_watchingIntro.Remove(playerId) && _watchingIntro.Count == 0)
+            Pause(900, 1400);
+    }
+
+    private bool IntroPlaying()
+    {
+        if (_watchingIntro.Count == 0)
+            return false;
+
+        _watchingIntro.RemoveWhere(id => State.Find(id) is not { IsConnected: true });
+
+        if (_watchingIntro.Count > 0 && DateTimeOffset.UtcNow < _introEndsAt)
+            return true;
+
+        _watchingIntro.Clear();
+        Pause(900, 1400);
+        return false;
+    }
+
     public void MarkDisconnected(string playerId) => _engine.RemovePlayer(playerId);
 
     public void MarkReconnected(string playerId) => _engine.Reconnect(playerId);
@@ -229,6 +275,9 @@ public sealed class GameRoom : IDisposable
                         continue;
 
                     PumpChat();
+
+                    if (IntroPlaying())
+                        continue;
 
                     if (_engine.Tick())
                         continue;

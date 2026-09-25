@@ -4,12 +4,16 @@ namespace Continental.Shared.Services;
 
 public sealed record Flight(string Target, string? FromSelector, double[]? FromRect, bool Flip, int DelayMs = 0);
 
+public sealed record SeatFlight(string Pile, string? Look, string Seat, bool FaceUp, int DelayMs = 0);
+
 public sealed class CardFlight(IJSRuntime js) : IAsyncDisposable
 {
     public const string Stock = "#pile-stock";
     public const string Discard = "#pile-discard";
     public const string DiscardCard = "#pile-discard .card";
     public const string Hand = ".hand__rail";
+    public const string StockCard = "#pile-stock .card";
+    public const string TakenCard = "#taken-card .card";
 
     private IJSObjectReference? _module;
     private bool _failed;
@@ -90,6 +94,27 @@ public sealed class CardFlight(IJSRuntime js) : IAsyncDisposable
 
         foreach (var flight in flights)
             _ = PlayCoreAsync(flight);
+    }
+
+    public void Play(IEnumerable<SeatFlight> flights)
+    {
+        if (_module is null)
+            return;
+
+        foreach (var flight in flights)
+            _ = PlayToSeatAsync(flight);
+    }
+
+    private async Task PlayToSeatAsync(SeatFlight flight)
+    {
+        try
+        {
+            await _module!.InvokeVoidAsync("flyToSeat", flight.Pile, flight.Look, flight.Seat, flight.FaceUp, flight.DelayMs);
+        }
+        catch (Exception)
+        {
+
+        }
     }
 
     private async Task PlayCoreAsync(Flight flight)

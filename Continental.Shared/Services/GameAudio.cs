@@ -6,6 +6,8 @@ public static class Sfx
 {
     public const string Deal = "deal";
     public const string Draw = "draw";
+    public const string OpponentDraw = "opponentDraw";
+    public const string OpponentTake = "opponentTake";
     public const string Place = "place";
     public const string Select = "select";
     public const string Shuffle = "shuffle";

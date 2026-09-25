@@ -135,6 +135,16 @@ const sounds = {
         noise({ duration: 0.05, freq: rand(3000, 3800), q: 1.0, gain: 0.2, sweep: 0.5 });
     },
 
+    opponentDraw() {
+        noise({ duration: 0.045, freq: rand(2600, 3200), q: 1.0, gain: 0.1, sweep: 0.5 });
+    },
+
+    opponentTake() {
+        noise({ duration: 0.06, freq: rand(2800, 3400), q: 1.0, gain: 0.16, sweep: 0.5 });
+        tone({ freq: 698.46, duration: 0.12, type: "triangle", gain: 0.08, delay: 0.05 });
+        tone({ freq: 523.25, duration: 0.18, type: "triangle", gain: 0.08, delay: 0.15 });
+    },
+
     place() {
         noise({ duration: 0.09, freq: rand(900, 1300), q: 0.7, gain: 0.26, type: "lowpass", sweep: 0.4 });
         tone({ freq: rand(105, 135), duration: 0.06, type: "sine", gain: 0.1 });

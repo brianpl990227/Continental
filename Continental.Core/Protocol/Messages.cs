@@ -26,6 +26,7 @@ public static class MessageType
     public const string Badge = "badge";
     public const string Pause = "pause";
     public const string Resume = "resume";
+    public const string IntroDone = "introdone";
 
     public const string Ping = "ping";
 

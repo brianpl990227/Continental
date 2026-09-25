@@ -173,7 +173,7 @@ else
         <div class="seats">
             @foreach (var player in View.Players.Where(p => p.Id != View.YouId).OrderBy(p => p.Seat))
             {
-                <div class="seat seat--s@(Accent(player.Seat)) @(player.IsCurrent ? "seat--current" : "") @(player.IsBot ? "seat--bot" : "") @(player.IsConnected ? "" : "seat--offline")"
+                <div class="seat seat--s@(Accent(player.Seat)) @(player.IsCurrent ? "seat--current" : "") @(player.IsBot ? "seat--bot" : "") @(player.IsConnected ? "" : "seat--offline") @(LastTake?.PlayerId == player.Id ? "seat--took" : "")"
                      data-seat="@player.Id">
                     <span class="seat__avatar @(player.Badge?.Avatar is null ? "" : "seat__avatar--emoji")">
                         @AvatarOf(player)
@@ -243,6 +243,20 @@ else
             </div>
 
             <div class="pile @(CanDraw && View.DiscardTop is not null ? "pile--actionable" : "")">
+                @if (LastTake is { } take)
+                {
+                    <div class="took seat--s@(Accent(take.Seat))" @key="take.Seq" role="status">
+                        <span class="took__avatar">@AvatarFor(take.PlayerId, take.Name)</span>
+                        <span class="took__text">
+                            <b>@take.Name</b> @(take.Penalty > 0 ? "roba" : "se lleva")
+                            <span class="took__card @(take.Card is { IsJoker: false, IsRed: true } ? "took__card--red" : "")">@(take.Card.IsJoker ? "el comodín" : take.Card.Label)</span>
+                            @if (take.Penalty > 0)
+                            {
+                                <span class="took__penalty">+@take.Penalty</span>
+                            }
+                        </span>
+                    </div>
+                }
                 <div id="pile-discard"
                      class="pile__stack @(View.DiscardTop is null ? "pile__stack--empty" : "")"
                      role="@(CanDraw ? "button" : null)"
@@ -259,6 +273,13 @@ else
                     }
                 </div>
                 <span class="pile__label">Pozo <span class="pile__count">@View.DiscardCount</span></span>
+            </div>
+
+            <div id="taken-card" aria-hidden="true">
+                @if (TakenCard is { } taken)
+                {
+                    <CardView Card="taken" />
+                }
             </div>
         </div>
 
@@ -568,6 +589,16 @@ else
     private Dictionary<int, string>? PrevMeldCards;
     private Dictionary<string, int>? PrevMeldSizes;
     private readonly List<Flight> Pending = [];
+    private readonly List<SeatFlight> PendingSeats = [];
+    private Dictionary<string, int>? PrevCardCounts;
+    private int PrevStockCount = -1;
+    private Card? PrevDiscardTop;
+    private int PrevRoundSeen = -1;
+    private Card? TakenCard;
+    private Take? LastTake;
+    private int TakeSeq;
+
+    private sealed record Take(int Seq, string PlayerId, string Name, int Seat, Card Card, int Penalty);
     private double[]? DiscardOrigin;
     private readonly Dictionary<int, double[]> LayOrigins = [];
 
@@ -712,6 +743,14 @@ else
 
             Flights.Play(batch);
         }
+
+        if (PendingSeats.Count > 0)
+        {
+            var batch = PendingSeats.ToList();
+            PendingSeats.Clear();
+
+            Flights.Play(batch);
+        }
     }
 
     private void OnChanged() => InvokeAsync(() =>
@@ -743,6 +782,9 @@ else
                     Dealing = true;
                     _ = ClearDealingSoon();
                     _ = ShowRoundCardAsync(view.RoundIndex);
+
+                    if (view.RoundIndex == 0)
+                        _ = Send(new ClientMessage { Type = MessageType.IntroDone });
                 }
             }
 
@@ -815,6 +857,8 @@ else
 
     private void QueueFlights(PlayerView view)
     {
+        QueueOpponentDraws(view);
+
         var handIds = view.Hand.Select(c => c.Id).ToHashSet();
 
         if (PrevHandIds is not null && !Dealing)
@@ -856,6 +900,86 @@ else
         PrevMeldCards = view.Table.SelectMany(m => m.Cards.Select(c => (c.Id, m.Id)))
                             .ToDictionary(x => x.Item1, x => x.Item2);
         PrevMeldSizes = view.Table.ToDictionary(m => m.Id, m => m.Cards.Count);
+    }
+
+    private void QueueOpponentDraws(PlayerView view)
+    {
+        var previous = PrevCardCounts;
+        var stockBefore = PrevStockCount;
+        var topBefore = PrevDiscardTop;
+        var sameRound = PrevRoundSeen == view.RoundIndex;
+
+        PrevCardCounts = view.Players.ToDictionary(p => p.Id, p => p.CardCount);
+        PrevStockCount = view.StockCount;
+        PrevDiscardTop = view.DiscardTop;
+        PrevRoundSeen = view.RoundIndex;
+
+        if (previous is null || !sameRound || Dealing || ShowIntro || view.Phase is GamePhase.Lobby or GamePhase.RoundEnd or GamePhase.GameOver)
+            return;
+
+        var fromDiscard = topBefore is not null && PrevDiscardCount >= 0 && view.DiscardCount < PrevDiscardCount;
+        var fromStock = stockBefore >= 0 && view.StockCount < stockBefore;
+
+        if (!fromDiscard && !fromStock)
+            return;
+
+        var gains = view.Players
+                        .Select(p => (Player: p, Gained: previous.TryGetValue(p.Id, out var before) ? p.CardCount - before : 0))
+                        .Where(x => x.Gained > 0)
+                        .ToList();
+
+        if (gains.Count == 0)
+            return;
+
+        var takerId = fromDiscard ? gains.MaxBy(x => x.Gained).Player.Id : null;
+        var delay = 0;
+
+        foreach (var (player, gained) in gains)
+        {
+            if (player.Id == view.YouId)
+                continue;
+
+            var seat = CardFlight.Seat(player.Id);
+            var fromPile = gained;
+
+            if (player.Id == takerId)
+            {
+                TakenCard = topBefore;
+                PendingSeats.Add(new SeatFlight(CardFlight.Discard, CardFlight.TakenCard, seat, FaceUp: true, delay));
+                ShowTake(player, topBefore!.Value, gained - 1);
+                Audio.Play(Sfx.OpponentTake);
+                fromPile--;
+                delay += 420;
+            }
+            else
+            {
+                Audio.Play(Sfx.OpponentDraw);
+            }
+
+            for (var i = 0; i < Math.Min(fromPile, 3); i++)
+            {
+                PendingSeats.Add(new SeatFlight(CardFlight.Stock, CardFlight.StockCard, seat, FaceUp: false, delay));
+                delay += 140;
+            }
+        }
+    }
+
+    private void ShowTake(PlayerSummary player, Card card, int penalty)
+    {
+        var take = new Take(++TakeSeq, player.Id, player.Name, player.Seat, card, penalty);
+        LastTake = take;
+        _ = HideTakeSoon(take.Seq);
+    }
+
+    private async Task HideTakeSoon(int seq)
+    {
+        await Task.Delay(2800);
+
+        if (LastTake?.Seq != seq)
+            return;
+
+        LastTake = null;
+        await InvokeAsync(StateHasChanged);
     }
 
     private void QueueMeldFlights(PlayerView view)
@@ -1015,6 +1139,7 @@ else
         Dealing = true;
         Audio.Play(Sfx.Shuffle);
         _ = ClearDealingSoon();
+        _ = Send(new ClientMessage { Type = MessageType.IntroDone });
         StateHasChanged();
     }
 
